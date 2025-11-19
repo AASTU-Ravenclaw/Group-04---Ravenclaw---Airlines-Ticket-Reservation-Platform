@@ -1,0 +1,95 @@
+# ============================
+# Python / Django
+# ============================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+develop-eggs/
+.eggs/
+*.manifest
+*.spec
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+.pyenv/
+
+# Django specific
+*.log
+*.pot
+*.mo
+staticfiles/
+media/
+
+# ============================
+# Environment Files
+# ============================
+.env
+.env.*
+*.env
+*.key
+secret.json
+
+# ============================
+# Node / API Gateway (if using JS gateway)
+# ============================
+node_modules/
+npm-debug.log*
+yarn-error.log*
+.pnpm-store/
+.pnpm-debug.log*
+
+# ============================
+# Logs
+# ============================
+logs/
+*.log
+*.out
+*.err
+
+# ============================
+# Docker
+# ============================
+# Ignore local DB volumes
+mongo-data/
+mongodb-data/
+data/
+docker-data/
+
+# Ignore any local container-generated files
+.docker/
+docker-compose.override.yml
+
+# ============================
+# VSCode
+# ============================
+.vscode/
+.history/
+
+# ============================
+# System Files
+# ============================
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+
+# ============================
+# Test / Coverage
+# ============================
+htmlcov/
+.coverage
+coverage.xml
+.cache/
+pytest_cache/
+junit.xml
+test-results/
