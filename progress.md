@@ -67,3 +67,29 @@ Overall, Week 9 sets the groundwork for the full service implementation that wil
 - Finalize integration of REST/gRPC communication and Pub/Sub event publishing.
 - Begin writing unit tests for implemented features.
 - Prepare for mid-Phase 2 validation and internal testing.
+
+## Week 10 – Phase 2 Implementation
+
+### Summary of Work Completed
+During Week 10, the team continued building on the work started last week. The basic structure for all microservices is now working, and the main focus was adding simple, working features to each service. 
+
+Key work done:
+- Added basic logic to the main microservices.
+- Connected REST/gRPC endpoints to simple controllers.
+- Set up the message broker (RabbitMQ/Kafka/Redis) and tested basic publishing and subscribing.
+- Improved shared configuration for environment variables and service connections.
+
+### Commits / PRs
+- Added basic service logic.
+- Added message broker setup and sample events.
+- Updated Docker Compose to run all services.
+
+### Issues / Blockers
+- No major blockers.
+
+### Planned Work for Next Week
+- Finish the remaining service logic and endpoints.
+- Complete event publishing and subscribing flow.
+- Start writing unit tests.
+- Begin integration testing across services.
+- Update documentation for APIs and event schemas.
