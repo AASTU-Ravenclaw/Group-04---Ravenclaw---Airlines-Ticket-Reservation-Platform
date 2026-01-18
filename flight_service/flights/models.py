@@ -4,7 +4,7 @@ from django.db import models
 class Location(models.Model):
     location_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
-    airport_code = models.CharField(max_length=10, unique=True) # e.g., ADD, JFK
+    airport_code = models.CharField(max_length=10, unique=True)
     city = models.CharField(max_length=255)
     country = models.CharField(max_length=255)
 
@@ -12,10 +12,17 @@ class Location(models.Model):
         return f"{self.airport_code} - {self.name}"
 
 class Flight(models.Model):
-    flight_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    flight_number = models.CharField(max_length=50) # e.g., ET-302
+    STATUS_CHOICES = [
+        ('scheduled', 'Scheduled'),
+        ('delayed', 'Delayed'),
+        ('boarding', 'Boarding'),
+        ('departed', 'Departed'),
+        ('cancelled', 'Cancelled'),
+    ]
     
-    # Relationships
+    flight_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    flight_number = models.CharField(max_length=50)
+    
     departure_location = models.ForeignKey(
         Location, on_delete=models.CASCADE, related_name='departures'
     )
@@ -23,15 +30,15 @@ class Flight(models.Model):
         Location, on_delete=models.CASCADE, related_name='arrivals'
     )
     
-    # Times
     departure_time = models.DateTimeField()
     arrival_time = models.DateTimeField()
     
-    # Capacity
     total_seats = models.IntegerField()
     available_seats = models.IntegerField()
     
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='scheduled')
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
