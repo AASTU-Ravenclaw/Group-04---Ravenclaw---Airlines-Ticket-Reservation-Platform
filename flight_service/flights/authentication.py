@@ -16,27 +16,16 @@ class RemoteUser:
     def __str__(self):
         return self.email
 
-class RemoteJWTAuthentication(authentication.BaseAuthentication):
+class HeaderAuthentication(authentication.BaseAuthentication):
     def authenticate(self, request):
-        auth_header = request.headers.get('Authorization')
+        user_id = request.META.get('HTTP_X_USER_ID')
 
-        if not auth_header:
-            return None 
-
-        try:
-            prefix, token = auth_header.split(' ')
-            if prefix.lower() != 'bearer':
-                return None
-
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
-            
-            user_id = payload.get('user_id')
-            email = payload.get('email', '')
-            role = payload.get('role', 'CLIENT')
-
-            user = RemoteUser(user_id, email, role)
-            
-            return (user, token)
-
-        except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, Exception):
+        if not user_id:
             return None
+
+        email = request.META.get('HTTP_X_USER_EMAIL', '')
+        role = request.META.get('HTTP_X_USER_ROLE', 'CLIENT')
+
+        user = RemoteUser(user_id, email, role)
+        
+        return (user, None)
