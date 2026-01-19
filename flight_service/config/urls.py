@@ -1,7 +1,11 @@
 from django.contrib import admin
 from django.urls import path, include, re_path
+from django.http import JsonResponse
 from rest_framework.routers import DefaultRouter
 from flights.views import LocationViewSet, FlightViewSet
+
+def health_check(request):
+    return JsonResponse({'status': 'healthy'})
 
 # Import drf-yasg schema generator
 from rest_framework import permissions
@@ -34,6 +38,9 @@ urlpatterns = [
     
     # 2. API Routes (using the router)
     path('api/v1/', include(router.urls)),
+    
+    # Health Check
+    path('health/', health_check, name='health_check'),
     
     # --- DRF-YASG DOCUMENTATION ENDPOINTS ---
     
