@@ -1,0 +1,67 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: main-ingress
+  namespace: airlines
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  rules:
+  - http:
+      paths:
+      # 1. Booking Service (API + Swagger)
+      - path: /api/v1/bookings
+        pathType: Prefix
+        backend:
+          service:
+            name: booking-service
+            port:
+              number: 8000
+      - path: /api/docs/booking
+        pathType: Prefix
+        backend:
+          service:
+            name: booking-service
+            port:
+              number: 8000
+      
+      # 2. Flight Service
+      - path: /api/v1/flights
+        pathType: Prefix
+        backend:
+          service:
+            name: flight-service
+            port:
+              number: 8000
+      - path: /api/v1/locations
+        pathType: Prefix
+        backend:
+          service:
+            name: flight-service
+            port:
+              number: 8000
+
+      # 3. User Service
+      - path: /api/v1/users
+        pathType: Prefix
+        backend:
+          service:
+            name: user-service
+            port:
+              number: 8000
+      - path: /api/v1/auth
+        pathType: Prefix
+        backend:
+          service:
+            name: user-service
+            port:
+              number: 8000
+      
+      # 4. Frontend (Root)
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend
+            port:
+              number: 80

@@ -1,0 +1,122 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: booking-migration
+  namespace: airlines
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+spec:
+  template:
+    metadata:
+      name: booking-migration
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: migration
+        image: booking-service:latest
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/sh", "-c", "python manage.py makemigrations && python manage.py migrate"]
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_DB_BOOKING
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: POSTGRES_DB_BOOKING
+        - name: DATABASE_URL
+          value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres-booking.airlines.svc.cluster.local:5432/$(POSTGRES_DB_BOOKING)
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: SECRET_KEY
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: flight-migration
+  namespace: airlines
+spec:
+  template:
+    metadata:
+      name: flight-migration
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: migration
+        image: flight-service:latest
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/sh", "-c", "python manage.py makemigrations && python manage.py migrate"]
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_DB_FLIGHT
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: POSTGRES_DB_FLIGHT
+        - name: DATABASE_URL
+          value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres-flight.airlines.svc.cluster.local:5432/$(POSTGRES_DB_FLIGHT)
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: SECRET_KEY
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: user-migration
+  namespace: airlines
+spec:
+  template:
+    metadata:
+      name: user-migration
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: migration
+        image: user-service:latest
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/sh", "-c", "python manage.py makemigrations && python manage.py migrate"]
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: POSTGRES_DB_USER
+        - name: DATABASE_URL
+          value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres-user.airlines.svc.cluster.local:5432/$(POSTGRES_DB_USER)
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: SECRET_KEY

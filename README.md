@@ -1,64 +1,131 @@
-# Airline Booking System
+# Flight Booking System
 
-A microservices-based airline booking system with separate services for users, flights, bookings, and notifications.
+## Overview
+
+This project is a microservices-based flight booking system that allows users to search for flights, make bookings, manage user accounts, and receive notifications. The system is designed for scalability and observability, with deployment orchestrated via Kubernetes.
 
 ## Architecture
 
-- **User Service**: User authentication and management
-- **Flight Service**: Flight and location management
-- **Booking Service**: Booking operations and business logic
-- **Notification Service**: Asynchronous notifications via RabbitMQ
-- **Frontend**: React application with modern UI
+The application follows a microservices architecture, consisting of multiple independent services that communicate via message queues (RabbitMQ) and APIs. It includes a frontend for user interaction and backend services for business logic.
 
-## Environment Setup
+### Key Components
 
-1. Copy the example environment file:
-   ```bash
-   cp .env.example .env
-   ```
+- **Frontend**: A React-based web application served via Nginx, providing the user interface for flight search, booking, and account management.
+- **Backend Services**:
+  - **User Service**: Handles user authentication, registration, and profile management.
+  - **Flight Service**: Manages flight data, search functionality, and flight-related operations.
+  - **Booking Service**: Processes flight bookings, payment integration, and booking history.
+  - **Notification Service**: Sends notifications to users via email or other channels, consuming messages from RabbitMQ.
+- **Infrastructure**:
+  - **Databases**: PostgreSQL for relational data (users, flights, bookings), MongoDB for notifications, Redis for caching.
+  - **Message Queue**: RabbitMQ for asynchronous communication between services.
+  - **Monitoring & Observability**: Prometheus for metrics, Grafana for dashboards, Jaeger for tracing, Loki for logging.
+  - **Load Balancing & Ingress**: Traefik for routing and load balancing.
+- **Deployment**: Kubernetes manifests for containerized deployment, including ConfigMaps, Secrets, Persistent Volumes, and Horizontal Pod Autoscalers (HPA).
 
-2. Update the `.env` file with your actual values:
-   - Database credentials
-   - Django secret keys
-   - Service API keys
-   - Message broker URLs
+## Project Structure
 
-## Running the Application
-
-1. Start all services:
-   ```bash
-   docker-compose up --build
-   ```
-
-2. Access the application:
-   - Frontend: http://localhost:3000
-   - API Gateway: http://localhost:801
-   - RabbitMQ Management: http://localhost:15672
-
-## Database Migrations
-
-To run Django migrations for the services when using Docker, execute the following commands after starting the services:
-
-```bash
-docker exec -it user_service python manage.py makemigrations
-docker exec -it user_service python manage.py migrate
-
-docker exec -it flight_service python manage.py makemigrations
-docker exec -it flight_service python manage.py migrate
-
-docker exec -it booking_service python manage.py makemigrations
-docker exec -it booking_service python manage.py migrate
+```
+/home/kaleb/school/ravenclaw/project copy (7)/
+├── booking_service/          # Django app for booking management
+│   ├── bookings/             # App-specific code (models, views, etc.)
+│   ├── config/               # Django settings and configuration
+│   ├── dockerfile            # Docker build instructions
+│   ├── manage.py             # Django management script
+│   ├── requirements.txt      # Python dependencies
+│   └── start.sh              # Startup script
+├── flight_service/           # Django app for flight management
+│   ├── config/               # Django settings
+│   ├── flights/              # App-specific code
+│   ├── dockerfile
+│   ├── manage.py
+│   ├── requirements.txt
+│   └── start.sh
+├── user_service/             # Django app for user management
+│   ├── config/               # Django settings
+│   ├── users/                # App-specific code
+│   ├── dockerfile
+│   ├── manage.py
+│   ├── requirements.txt
+│   └── start.sh
+├── notification_service/     # Django app for notifications
+│   ├── config/               # Django settings
+│   ├── notifications/        # App-specific code
+│   ├── dockerfile
+│   ├── manage.py
+│   ├── requirements.txt
+│   └── test_mq.py            # Message queue testing
+├── frontend/                 # React frontend application
+│   ├── src/                  # Source code
+│   ├── dockerfile
+│   ├── package.json          # Node.js dependencies
+│   ├── vite.config.js        # Vite build configuration
+│   └── nginx.conf            # Nginx configuration
+├── k8s/                      # Kubernetes deployment manifests
+│   ├── *-service.yaml        # Service-specific deployments
+│   ├── configmap.yaml        # Configuration maps
+│   ├── secrets.yaml          # Secrets management
+│   ├── ingress.yaml          # Ingress configuration
+│   ├── hpa.yaml              # Horizontal Pod Autoscaler
+│   ├── pvcs.yaml             # Persistent Volume Claims
+│   └── ...                   # Other infrastructure configs
+├── kubectl                   # kubectl configuration
+├── targets.json              # Monitoring targets
+└── traefik.yaml              # Traefik configuration
 ```
 
-## Services
+## Technologies Used
 
-### Databases
-- PostgreSQL for user, flight, and booking services
-- MongoDB for notification service
-- RabbitMQ for message queuing
+- **Backend**: Python, Django, Django REST Framework
+- **Frontend**: React, Vite, Nginx
+- **Databases**: PostgreSQL, MongoDB, Redis
+- **Message Queue**: RabbitMQ
+- **Containerization**: Docker
+- **Orchestration**: Kubernetes
+- **Monitoring**: Prometheus, Grafana, Jaeger, Loki
+- **Load Balancing**: Traefik
+- **Observability**: OpenTelemetry (OTel)
 
-### API Endpoints
-- User Service: `/api/v1/auth`, `/api/v1/users`
-- Flight Service: `/api/v1/flights`, `/api/v1/locations`
-- Booking Service: `/api/v1/bookings`
-- Notification Service: `/api/v1/notifications`
+## Getting Started
+
+### Prerequisites
+
+- Docker and Docker Compose
+- Kubernetes cluster (e.g., Minikube, Kind, or cloud provider)
+- kubectl configured
+
+### Installation
+
+1. **Clone the repository** (if applicable) and navigate to the project root.
+
+2. **Build and deploy services**:
+   - Ensure all services are containerized using their respective Dockerfiles.
+   - Apply Kubernetes manifests:
+     ```
+     kubectl apply -f k8s/
+     ```
+
+3. **Database Setup**:
+   - PostgreSQL databases for user, flight, and booking services.
+   - MongoDB for notifications.
+   - Run migrations for Django services:
+     ```
+     # For each service (booking_service, flight_service, user_service, notification_service)
+     cd <service_directory>
+     python manage.py migrate
+     ```
+
+4. **Environment Variables**:
+   - Configure secrets and configmaps in `k8s/secrets.yaml` and `k8s/configmap.yaml` for database connections, API keys, etc.
+
+### Running the Application
+
+- Access the frontend at the configured ingress URL (e.g., via Traefik).
+- Services will be exposed internally via Kubernetes services.
+
+### Monitoring
+
+- Prometheus: Access metrics at configured endpoint.
+- Grafana: Dashboards for visualization.
+- Jaeger: Distributed tracing UI.
+- Loki: Log aggregation.

@@ -1,0 +1,124 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: traefik-config
+  namespace: airlines
+data:
+  traefik.yaml: |
+    http:
+      middlewares:
+        auth-middleware:
+          forwardAuth:
+            address: "http://user-service.airlines.svc.cluster.local:8000/api/v1/auth/validate"
+            authResponseHeaders:
+              - "X-User-Id"
+              - "X-User-Email"
+              - "X-User-Role"
+
+      routers:
+        user-router:
+          rule: "(PathPrefix(`/api/v1/auth`) || PathPrefix(`/api/v1/users`)) && (Method(`GET`) || Method(`POST`) || Method(`PUT`) || Method(`DELETE`) || Method(`PATCH`))"
+          priority: 10
+          service: user-service
+
+        user-options-router:
+          rule: "(PathPrefix(`/api/v1/auth`) || PathPrefix(`/api/v1/users`)) && Method(`OPTIONS`)"
+          priority: 10
+          service: user-service
+
+        flight-read-router:
+          rule: "(PathPrefix(`/api/v1/flights`) || PathPrefix(`/api/v1/locations`)) && Method(`GET`)"
+          priority: 10
+          service: flight-service
+
+        flight-options-router:
+          rule: "(PathPrefix(`/api/v1/flights`) || PathPrefix(`/api/v1/locations`)) && Method(`OPTIONS`)"
+          priority: 10
+          service: flight-service
+
+        flight-write-router:
+          rule: "(PathPrefix(`/api/v1/flights`) || PathPrefix(`/api/v1/locations`)) && (Method(`POST`) || Method(`PUT`) || Method(`DELETE`) || Method(`PATCH`))"
+          priority: 10
+          service: flight-service
+          middlewares:
+            - auth-middleware
+
+        flight-docs-router:
+          rule: "(PathPrefix(`/api/docs`) || PathPrefix(`/api/schema`)) && !PathPrefix(`/api/docs/`) && !PathPrefix(`/api/schema/`)"
+          priority: 10
+          service: flight-service
+
+        user-docs-router:
+          rule: "PathPrefix(`/swagger`) || PathPrefix(`/redoc`)"
+          priority: 10
+          service: user-service
+
+        booking-docs-router:
+          rule: "PathPrefix(`/api/docs/booking`) || PathPrefix(`/api/schema/booking`)"
+          priority: 10
+          service: booking-service
+
+        notification-docs-router:
+          rule: "PathPrefix(`/api/docs/notification`) || PathPrefix(`/api/schema/notification`)"
+          priority: 10
+          service: notification-service
+
+        booking-router:
+          rule: "PathPrefix(`/api/v1/bookings`) && (Method(`GET`) || Method(`POST`) || Method(`PUT`) || Method(`DELETE`) || Method(`PATCH`))"
+          priority: 10
+          service: booking-service
+          middlewares:
+            - auth-middleware
+
+        booking-options-router:
+          rule: "PathPrefix(`/api/v1/bookings`) && Method(`OPTIONS`)"
+          priority: 10
+          service: booking-service
+
+        notification-router:
+          rule: "PathPrefix(`/api/v1/notifications`) && (Method(`GET`) || Method(`POST`) || Method(`PUT`) || Method(`DELETE`) || Method(`PATCH`))"
+          priority: 10
+          service: notification-service
+          middlewares:
+            - auth-middleware
+
+        notification-options-router:
+          rule: "PathPrefix(`/api/v1/notifications`) && Method(`OPTIONS`)"
+          priority: 10
+          service: notification-service
+
+        notification-ws-router:
+          rule: "PathPrefix(`/ws/notifications`)"
+          priority: 10
+          service: notification-service
+
+        frontend-router:
+          rule: "PathPrefix(`/`)"
+          priority: 1
+          service: frontend
+
+      services:
+        user-service:
+          loadBalancer:
+            servers:
+              - url: "http://user-service:8000"
+
+        flight-service:
+          loadBalancer:
+            servers:
+              - url: "http://flight-service.airlines.svc.cluster.local:8000"
+
+        booking-service:
+          loadBalancer:
+            servers:
+              - url: "http://booking-service:8000"
+
+        notification-service:
+          loadBalancer:
+            servers:
+              - url: "http://notification-service:8000"
+
+        frontend:
+          loadBalancer:
+            servers:
+              - url: "http://frontend:80"

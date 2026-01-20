@@ -1,0 +1,139 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  labels:
+    name: observability
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: observability
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    rule_files:
+      # - "first_rules.yml"
+      # - "second_rules.yml"
+
+    scrape_configs:
+      # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+
+      # Microservices metrics
+      - job_name: 'user-service'
+        static_configs:
+          - targets: ['user-service.airlines.svc.cluster.local:8000']
+        metrics_path: '/metrics/metrics'
+        scrape_interval: 5s
+
+      - job_name: 'flight-service'
+        static_configs:
+          - targets: ['flight-service.airlines.svc.cluster.local:8000']
+        metrics_path: '/metrics/metrics'
+        scrape_interval: 5s
+
+      - job_name: 'booking-service'
+        static_configs:
+          - targets: ['booking-service.airlines.svc.cluster.local:8000']
+        metrics_path: '/metrics/metrics'
+        scrape_interval: 5s
+
+      - job_name: 'notification-service'
+        static_configs:
+          - targets: ['notification-service.airlines.svc.cluster.local:8000']
+        metrics_path: '/metrics/metrics'
+        scrape_interval: 5s
+
+      # Infrastructure metrics
+      - job_name: 'postgres-user'
+        static_configs:
+          - targets: ['postgres-user.airlines.svc.cluster.local:9187']
+
+      - job_name: 'postgres-flight'
+        static_configs:
+          - targets: ['postgres-flight.airlines.svc.cluster.local:9187']
+
+      - job_name: 'postgres-booking'
+        static_configs:
+          - targets: ['postgres-booking.airlines.svc.cluster.local:9187']
+
+      - job_name: 'redis'
+        static_configs:
+          - targets: ['redis.airlines.svc.cluster.local:9121']
+
+      - job_name: 'rabbitmq'
+        static_configs:
+          - targets: ['rabbitmq.airlines.svc.cluster.local:15692']
+
+      - job_name: 'mongodb'
+        static_configs:
+          - targets: ['mongo-notification.airlines.svc.cluster.local:9216']
+
+      - job_name: 'otel-collector'
+        static_configs:
+          - targets: ['otel-collector.observability.svc.cluster.local:8889']
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: observability
+  labels:
+    app: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+      - name: prometheus
+        image: prom/prometheus:latest
+        ports:
+        - containerPort: 9090
+        volumeMounts:
+        - name: prometheus-config
+          mountPath: /etc/prometheus/prometheus.yml
+          subPath: prometheus.yml
+        - name: prometheus-storage
+          mountPath: /prometheus
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
+      volumes:
+      - name: prometheus-config
+        configMap:
+          name: prometheus-config
+      - name: prometheus-storage
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: observability
+  labels:
+    app: prometheus
+spec:
+  selector:
+    app: prometheus
+  ports:
+  - port: 9090
+    targetPort: 9090
+    name: web
+  type: ClusterIP

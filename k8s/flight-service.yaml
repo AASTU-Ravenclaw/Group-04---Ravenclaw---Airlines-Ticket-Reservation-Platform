@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flight-service
+  namespace: airlines
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flight-service
+  template:
+    metadata:
+      labels:
+        app: flight-service
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: flight-service
+      containers:
+      - name: flight-service
+        image: flight-service:latest
+        imagePullPolicy: IfNotPresent
+        command: ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000"]
+        ports:
+        - containerPort: 8000
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "64Mi"
+          limits:
+            cpu: "200m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health/
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health/
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+        env:
+        - name: OTEL_SERVICE_NAME
+          value: flight-service
+        - name: SERVICE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: SERVICE_API_KEY
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: SECRET_KEY
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_DB_FLIGHT
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: POSTGRES_DB_FLIGHT
+        - name: RABBITMQ_URL
+          value: amqp://guest:guest@rabbitmq.airlines.svc.cluster.local:5672/
+        - name: RABBITMQ_DEFAULT_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: RABBITMQ_DEFAULT_USER
+        - name: RABBITMQ_DEFAULT_PASS
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: RABBITMQ_DEFAULT_PASS
+        - name: DATABASE_URL
+          value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres-flight.airlines.svc.cluster.local:5432/$(POSTGRES_DB_FLIGHT)
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flight-service
+  namespace: airlines
+spec:
+  type: ClusterIP
+  selector:
+    app: flight-service
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000

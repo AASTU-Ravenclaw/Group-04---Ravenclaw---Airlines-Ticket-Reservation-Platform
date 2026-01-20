@@ -1,0 +1,210 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: booking-service
+  namespace: airlines
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: booking-service
+  template:
+    metadata:
+      labels:
+        app: booking-service
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: booking-service
+      containers:
+      - name: booking-service
+        image: booking-service:latest
+        imagePullPolicy: IfNotPresent
+        command: ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000"]
+        ports:
+        - containerPort: 8000
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "64Mi"
+          limits:
+            cpu: "200m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health/
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health/
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+        env:
+        - name: OTEL_SERVICE_NAME
+          value: booking-service
+        - name: FLIGHT_SERVICE_URL
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: FLIGHT_SERVICE_URL
+        - name: SERVICE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: SERVICE_API_KEY
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: SECRET_KEY
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_DB_BOOKING
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: POSTGRES_DB_BOOKING
+        - name: RABBITMQ_URL
+          value: amqp://guest:guest@rabbitmq.airlines.svc.cluster.local:5672/
+        - name: RABBITMQ_DEFAULT_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: RABBITMQ_DEFAULT_USER
+        - name: RABBITMQ_DEFAULT_PASS
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: RABBITMQ_DEFAULT_PASS
+        - name: DATABASE_URL
+          value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres-booking.airlines.svc.cluster.local:5432/$(POSTGRES_DB_BOOKING)
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: booking-service
+  namespace: airlines
+spec:
+  type: ClusterIP
+  selector:
+    app: booking-service
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: booking-worker
+  namespace: airlines
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: booking-worker
+  template:
+    metadata:
+      labels:
+        app: booking-worker
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: booking-worker
+      containers:
+      - name: booking-worker
+        image: booking-service:latest
+        imagePullPolicy: IfNotPresent
+        command: ["python", "manage.py", "run_consumer"]
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import os, time, sys; sys.exit(0 if os.path.exists('/tmp/healthy') and time.time() - os.path.getmtime('/tmp/healthy') < 30 else 1)"
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import os, time, sys; sys.exit(0 if os.path.exists('/tmp/healthy') and time.time() - os.path.getmtime('/tmp/healthy') < 10 else 1)"
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "64Mi"
+          limits:
+            cpu: "300m"
+            memory: "128Mi"
+
+        env:
+        - name: OTEL_SERVICE_NAME
+          value: booking-worker
+        - name: FLIGHT_SERVICE_URL
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: FLIGHT_SERVICE_URL
+        - name: SERVICE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: SERVICE_API_KEY
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: SECRET_KEY
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_DB_BOOKING
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: POSTGRES_DB_BOOKING
+        - name: RABBITMQ_URL
+          value: amqp://guest:guest@rabbitmq.airlines.svc.cluster.local:5672/
+        - name: RABBITMQ_DEFAULT_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: RABBITMQ_DEFAULT_USER
+        - name: RABBITMQ_DEFAULT_PASS
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: RABBITMQ_DEFAULT_PASS
+        - name: DATABASE_URL
+          value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres-booking.airlines.svc.cluster.local:5432/$(POSTGRES_DB_BOOKING)
+

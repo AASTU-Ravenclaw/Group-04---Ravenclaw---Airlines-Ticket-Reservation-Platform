@@ -1,0 +1,208 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+  namespace: airlines
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: notification-service
+      containers:
+      - name: notification-service
+        image: notification-service:latest
+        imagePullPolicy: IfNotPresent
+        command: ["daphne", "-b", "0.0.0.0", "-p", "8000", "config.asgi:application"]
+        ports:
+        - containerPort: 8000
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "64Mi"
+          limits:
+            cpu: "200m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health/
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health/
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+        env:
+        - name: OTEL_SERVICE_NAME
+          value: notification-service
+        - name: MONGO_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: MONGO_INITDB_ROOT_USERNAME
+        - name: MONGO_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: MONGO_INITDB_ROOT_PASSWORD
+        - name: MONGO_URI
+          value: mongodb://$(MONGO_USERNAME):$(MONGO_PASSWORD)@mongo-notification.airlines.svc.cluster.local:27017/notification_db?authSource=admin
+        - name: REDIS_URL
+          value: redis://redis.airlines.svc.cluster.local:6379/0
+        - name: DJANGO_SETTINGS_MODULE
+          value: config.settings
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: SECRET_KEY
+        - name: MONGO_INITDB_ROOT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: MONGO_INITDB_ROOT_USERNAME
+        - name: MONGO_INITDB_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: MONGO_INITDB_ROOT_PASSWORD
+        - name: RABBITMQ_URL
+          value: amqp://guest:guest@rabbitmq.airlines.svc.cluster.local:5672/
+        - name: RABBITMQ_DEFAULT_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: RABBITMQ_DEFAULT_USER
+        - name: RABBITMQ_DEFAULT_PASS
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: RABBITMQ_DEFAULT_PASS
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+  namespace: airlines
+spec:
+  type: ClusterIP
+  selector:
+    app: notification-service
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-worker
+  namespace: airlines
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification-worker
+  template:
+    metadata:
+      labels:
+        app: notification-worker
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: notification-worker
+      containers:
+      - name: notification-worker
+        image: notification-service:latest
+        imagePullPolicy: IfNotPresent
+        command: ["python", "manage.py", "run_consumer"]
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import os, time, sys; sys.exit(0 if os.path.exists('/tmp/healthy') and time.time() - os.path.getmtime('/tmp/healthy') < 30 else 1)"
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import os, time, sys; sys.exit(0 if os.path.exists('/tmp/healthy') and time.time() - os.path.getmtime('/tmp/healthy') < 10 else 1)"
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "64Mi"
+          limits:
+            cpu: "300m"
+            memory: "128Mi"
+
+        env:
+        - name: OTEL_SERVICE_NAME
+          value: notification-worker
+        - name: MONGO_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: MONGO_INITDB_ROOT_USERNAME
+        - name: MONGO_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: MONGO_INITDB_ROOT_PASSWORD
+        - name: MONGO_URI
+          value: mongodb://$(MONGO_USERNAME):$(MONGO_PASSWORD)@mongo-notification.airlines.svc.cluster.local:27017/notification_db?authSource=admin
+        - name: REDIS_URL
+          value: redis://redis.airlines.svc.cluster.local:6379/0
+        - name: DJANGO_SETTINGS_MODULE
+          value: config.settings
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: SECRET_KEY
+        - name: MONGO_INITDB_ROOT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: MONGO_INITDB_ROOT_USERNAME
+        - name: MONGO_INITDB_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: MONGO_INITDB_ROOT_PASSWORD
+        - name: RABBITMQ_URL
+          value: amqp://guest:guest@rabbitmq.airlines.svc.cluster.local:5672/
+        - name: RABBITMQ_DEFAULT_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: RABBITMQ_DEFAULT_USER
+        - name: RABBITMQ_DEFAULT_PASS
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: RABBITMQ_DEFAULT_PASS
+

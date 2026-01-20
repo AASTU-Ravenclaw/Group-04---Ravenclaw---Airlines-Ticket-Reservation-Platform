@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongo-notification
+  namespace: airlines
+spec:
+  serviceName: "mongo-notification"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongo-notification
+  template:
+    metadata:
+      labels:
+        app: mongo-notification
+    spec:
+      containers:
+      - name: mongo
+        image: mongo:6.0
+        ports:
+        - containerPort: 27017
+        resources:
+           requests:
+             memory: "128Mi"
+             cpu: "50m"
+           limits:
+             memory: "512Mi"
+             cpu: "200m"
+        volumeMounts:
+        - name: data
+          mountPath: /data/db
+        env:
+        - name: MONGO_INITDB_ROOT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: MONGO_INITDB_ROOT_USERNAME
+        - name: MONGO_INITDB_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: MONGO_INITDB_ROOT_PASSWORD
+      - name: mongodb-exporter
+        image: percona/mongodb_exporter:0.40.0
+        ports:
+        - containerPort: 9216
+        env:
+        - name: MONGO_INITDB_ROOT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: MONGO_INITDB_ROOT_USERNAME
+        - name: MONGO_INITDB_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: MONGO_INITDB_ROOT_PASSWORD
+        - name: MONGODB_URI
+          value: "mongodb://$(MONGO_INITDB_ROOT_USERNAME):$(MONGO_INITDB_ROOT_PASSWORD)@localhost:27017"
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "10m"
+          limits:
+            memory: "64Mi"
+            cpu: "50m"
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo-notification
+  namespace: airlines
+spec:
+  clusterIP: None
+  selector:
+    app: mongo-notification
+  ports:
+  - name: mongo
+    port: 27017
+    targetPort: 27017
+  - name: metrics
+    port: 9216
+    targetPort: 9216
