@@ -1,0 +1,726 @@
+{
+  "info": {
+    "name": "Airlines Traefik API (Full Coverage)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "All API endpoints exposed through Traefik ingress, with authentication and tests."
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://192.168.49.2:31583" },
+    { "key": "ws_base_url", "value": "ws://192.168.49.2:31583" },
+    { "key": "service_api_key", "value": "dev-service-key-12345" },
+    { "key": "run_suffix", "value": "" },
+    { "key": "admin_email", "value": "" },
+    { "key": "admin_password", "value": "" },
+    { "key": "client_email", "value": "" },
+    { "key": "client_password", "value": "" },
+    { "key": "admin_access_token", "value": "" },
+    { "key": "admin_refresh_token", "value": "" },
+    { "key": "client_access_token", "value": "" },
+    { "key": "client_refresh_token", "value": "" },
+    { "key": "admin_user_id", "value": "" },
+    { "key": "client_user_id", "value": "" },
+    { "key": "origin_code", "value": "" },
+    { "key": "dest_code", "value": "" },
+    { "key": "origin_location_id", "value": "" },
+    { "key": "dest_location_id", "value": "" },
+    { "key": "flight_number", "value": "" },
+    { "key": "flight_id", "value": "" },
+    { "key": "booking_id", "value": "" },
+    { "key": "notification_id", "value": "" },
+    { "key": "departure_time", "value": "" },
+    { "key": "arrival_time", "value": "" },
+    { "key": "delayed_departure_time", "value": "" },
+    { "key": "delayed_arrival_time", "value": "" }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const vars = pm.collectionVariables;",
+          "if (!vars.get('run_suffix')) {",
+          "  const suffix = Date.now().toString().slice(-6);",
+          "  vars.set('run_suffix', suffix);",
+          "  vars.set('admin_email', `admin_${suffix}@example.com`);",
+          "  vars.set('admin_password', `AdminPass!${suffix}`);",
+          "  vars.set('client_email', `client_${suffix}@example.com`);",
+          "  vars.set('client_password', `ClientPass!${suffix}`);",
+          "  vars.set('origin_code', `ORG${suffix}`);",
+          "  vars.set('dest_code', `DST${suffix}`);",
+          "  vars.set('flight_number', `FN${suffix}`);",
+          "  const now = new Date();",
+          "  const dep = new Date(now.getTime() + 60*60*1000);",
+          "  const arr = new Date(now.getTime() + 4*60*60*1000);",
+          "  const dep2 = new Date(now.getTime() + 2*60*60*1000);",
+          "  const arr2 = new Date(now.getTime() + 5*60*60*1000);",
+          "  vars.set('departure_time', dep.toISOString());",
+          "  vars.set('arrival_time', arr.toISOString());",
+          "  vars.set('delayed_departure_time', dep2.toISOString());",
+          "  vars.set('delayed_arrival_time', arr2.toISOString());",
+          "}",
+          "const base = vars.get('base_url');",
+          "if (base) {",
+          "  const wsBase = base.startsWith('https://') ? base.replace('https://','wss://') : base.replace('http://','ws://');",
+          "  vars.set('ws_base_url', wsBase);",
+          "}",
+          "if (!vars.get('service_api_key')) {",
+          "  vars.set('service_api_key', 'dev-service-key-12345');",
+          "}",
+          "if (!vars.get('booking_id')) {",
+          "  vars.set('booking_id', '00000000-0000-0000-0000-000000000000');",
+          "}",
+          "if (!vars.get('notification_id')) {",
+          "  vars.set('notification_id', '000000000000000000000000');",
+          "}",
+          "const shouldAuthClient = pm.request.headers.has('Authorization') && pm.request.headers.get('Authorization').includes('{{client_access_token}}');",
+          "const shouldAuthAdmin = pm.request.headers.has('X-User-Role') && pm.request.headers.get('X-User-Role').toUpperCase() === 'ADMIN';",
+          "const loginRequest = (email, password) => ({",
+          "  url: `${base}/api/v1/auth/login`,",
+          "  method: 'POST',",
+          "  header: { 'Content-Type': 'application/json' },",
+          "  body: { mode: 'raw', raw: JSON.stringify({ email, password }) }",
+          "});",
+          "const registerRequest = (email, password, role) => ({",
+          "  url: `${base}/api/v1/auth/register`,",
+          "  method: 'POST',",
+          "  header: { 'Content-Type': 'application/json' },",
+          "  body: { mode: 'raw', raw: JSON.stringify({ first_name: role === 'ADMIN' ? 'Admin' : 'Client', last_name: 'User', email, password, role }) }",
+          "});",
+          "const ensureAuth = async (prefix, role) => {",
+          "  if (!base) return;",
+          "  const email = vars.get(`${prefix}_email`);",
+          "  const password = vars.get(`${prefix}_password`);",
+          "  if (!email || !password) return;",
+          "  if (vars.get(`${prefix}_access_token`) && vars.get(`${prefix}_user_id`)) return;",
+          "  const tryLogin = async () => {",
+          "    const res = await pm.sendRequest(loginRequest(email, password));",
+          "    if (res && res.code === 200) {",
+          "      const json = res.json();",
+          "      vars.set(`${prefix}_access_token`, json.access);",
+          "      vars.set(`${prefix}_refresh_token`, json.refresh);",
+          "      if (json.user) {",
+          "        vars.set(`${prefix}_user_id`, json.user.id);",
+          "        vars.set(`${prefix}_email`, json.user.email);",
+          "      }",
+          "      return true;",
+          "    }",
+          "    return false;",
+          "  };",
+          "  const loggedIn = await tryLogin();",
+          "  if (loggedIn) return;",
+          "  await pm.sendRequest(registerRequest(email, password, role));",
+          "  await tryLogin();",
+          "};",
+          "(async () => {",
+          "  if (shouldAuthClient) {",
+          "    await ensureAuth('client', 'CLIENT');",
+          "  }",
+          "  if (shouldAuthAdmin) {",
+          "    await ensureAuth('admin', 'ADMIN');",
+          "  }",
+          "})();"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register Admin",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/api/v1/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Admin\",\n  \"last_name\": \"User\",\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\",\n  \"role\": \"ADMIN\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('status 201 or 400', () => [201,400].includes(pm.response.code));"] }
+            }
+          ]
+        },
+        {
+          "name": "Register Client",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/api/v1/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Client\",\n  \"last_name\": \"User\",\n  \"email\": \"{{client_email}}\",\n  \"password\": \"{{client_password}}\",\n  \"role\": \"CLIENT\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('status 201 or 400', () => [201,400].includes(pm.response.code));"] }
+            }
+          ]
+        },
+        {
+          "name": "Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/api/v1/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.code === 200);",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('admin_access_token', json.access);",
+                  "pm.collectionVariables.set('admin_refresh_token', json.refresh);",
+                  "if (json.user) {",
+                  "  pm.collectionVariables.set('admin_user_id', json.user.id);",
+                  "  pm.collectionVariables.set('admin_email', json.user.email);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login Client",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/api/v1/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{client_email}}\",\n  \"password\": \"{{client_password}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.code === 200);",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('client_access_token', json.access);",
+                  "pm.collectionVariables.set('client_refresh_token', json.refresh);",
+                  "if (json.user) {",
+                  "  pm.collectionVariables.set('client_user_id', json.user.id);",
+                  "  pm.collectionVariables.set('client_email', json.user.email);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Validate Token (Client)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_access_token}}" }],
+            "url": "{{base_url}}/api/v1/auth/validate"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.code === 200);",
+                  "pm.test('valid true', () => pm.response.json().valid === true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh Token (Client)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/api/v1/auth/refresh",
+            "body": { "mode": "raw", "raw": "{\n  \"refresh\": \"{{client_refresh_token}}\"\n}" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.code === 200);",
+                  "pm.test('access returned', () => !!pm.response.json().access);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get Profile (Client)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_access_token}}" }],
+            "url": "{{base_url}}/api/v1/users/me"
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status 200', () => pm.response.code === 200);"] } }
+          ]
+        },
+        {
+          "name": "Update Profile (Client)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{client_access_token}}" }
+            ],
+            "url": "{{base_url}}/api/v1/users/me",
+            "body": { "mode": "raw", "raw": "{\n  \"first_name\": \"UpdatedClient\"\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status 200', () => pm.response.code === 200);"] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Flight - Locations",
+      "item": [
+        {
+          "name": "Create Origin Location (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-User-Id", "value": "{{admin_user_id}}" },
+              { "key": "X-User-Email", "value": "{{admin_email}}" },
+              { "key": "X-User-Role", "value": "ADMIN" }
+            ],
+            "url": "{{base_url}}/api/v1/locations/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Origin {{run_suffix}}\",\n  \"airport_code\": \"{{origin_code}}\",\n  \"city\": \"Origin City\",\n  \"country\": \"US\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 201', () => pm.response.code === 201);",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('origin_location_id', json.location_id || json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Destination Location (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-User-Id", "value": "{{admin_user_id}}" },
+              { "key": "X-User-Email", "value": "{{admin_email}}" },
+              { "key": "X-User-Role", "value": "ADMIN" }
+            ],
+            "url": "{{base_url}}/api/v1/locations/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Destination {{run_suffix}}\",\n  \"airport_code\": \"{{dest_code}}\",\n  \"city\": \"Destination City\",\n  \"country\": \"US\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 201', () => pm.response.code === 201);",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('dest_location_id', json.location_id || json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Locations",
+          "request": { "method": "GET", "url": "{{base_url}}/api/v1/locations/" },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status 200', () => pm.response.code === 200);", "pm.test('array', () => Array.isArray(pm.response.json()));"] } }
+          ]
+        },
+        {
+          "name": "Get Origin Location",
+          "request": { "method": "GET", "url": "{{base_url}}/api/v1/locations/{{origin_location_id}}/" },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status 200', () => pm.response.code === 200);"] } }
+          ]
+        },
+        {
+          "name": "Update Origin Location (PUT)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-User-Id", "value": "{{admin_user_id}}" },
+              { "key": "X-User-Email", "value": "{{admin_email}}" },
+              { "key": "X-User-Role", "value": "ADMIN" }
+            ],
+            "url": "{{base_url}}/api/v1/locations/{{origin_location_id}}/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Origin Updated {{run_suffix}}\",\n  \"airport_code\": \"{{origin_code}}\",\n  \"city\": \"Origin City\",\n  \"country\": \"US\"\n}"
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status 200', () => pm.response.code === 200);"] } }
+          ]
+        },
+        {
+          "name": "Patch Origin Location (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-User-Id", "value": "{{admin_user_id}}" },
+              { "key": "X-User-Email", "value": "{{admin_email}}" },
+              { "key": "X-User-Role", "value": "ADMIN" }
+            ],
+            "url": "{{base_url}}/api/v1/locations/{{origin_location_id}}/",
+            "body": { "mode": "raw", "raw": "{\n  \"city\": \"Origin City Updated\"\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status 200', () => pm.response.code === 200);"] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Flight - Flights",
+      "item": [
+        {
+          "name": "Create Flight (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-User-Id", "value": "{{admin_user_id}}" },
+              { "key": "X-User-Email", "value": "{{admin_email}}" },
+              { "key": "X-User-Role", "value": "ADMIN" }
+            ],
+            "url": "{{base_url}}/api/v1/flights/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"flight_number\": \"{{flight_number}}\",\n  \"departure_location\": \"{{origin_code}}\",\n  \"arrival_location\": \"{{dest_code}}\",\n  \"departure_time\": \"{{departure_time}}\",\n  \"arrival_time\": \"{{arrival_time}}\",\n  \"total_seats\": 50,\n  \"available_seats\": 50,\n  \"price\": \"199.99\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 201', () => pm.response.code === 201);",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('flight_id', json.flight_id || json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Flights (filtered)",
+          "request": { "method": "GET", "url": "{{base_url}}/api/v1/flights/?origin={{origin_code}}&destination={{dest_code}}" },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status 200', () => pm.response.code === 200);", "pm.test('array', () => Array.isArray(pm.response.json()));"] } }
+          ]
+        },
+        {
+          "name": "Get Flight",
+          "request": { "method": "GET", "url": "{{base_url}}/api/v1/flights/{{flight_id}}/" },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status 200', () => pm.response.code === 200);"] } }
+          ]
+        },
+        {
+          "name": "Update Flight (PUT)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-User-Id", "value": "{{admin_user_id}}" },
+              { "key": "X-User-Email", "value": "{{admin_email}}" },
+              { "key": "X-User-Role", "value": "ADMIN" }
+            ],
+            "url": "{{base_url}}/api/v1/flights/{{flight_id}}/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"departure_time\": \"{{delayed_departure_time}}\",\n  \"arrival_time\": \"{{delayed_arrival_time}}\",\n  \"status\": \"boarding\"\n}"
+            }
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status 200', () => pm.response.code === 200);"] } }
+          ]
+        },
+        {
+          "name": "Patch Flight (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-User-Id", "value": "{{admin_user_id}}" },
+              { "key": "X-User-Email", "value": "{{admin_email}}" },
+              { "key": "X-User-Role", "value": "ADMIN" }
+            ],
+            "url": "{{base_url}}/api/v1/flights/{{flight_id}}/",
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"boarding\"\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status 200', () => pm.response.code === 200);"] } }
+          ]
+        },
+        {
+          "name": "Reserve Seat (Service Key)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Service-API-Key", "value": "{{service_api_key}}" }],
+            "url": "{{base_url}}/api/v1/flights/{{flight_id}}/reserve_seat/"
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status 200 or 409', () => [200,409].includes(pm.response.code));"] } }
+          ]
+        },
+        {
+          "name": "Release Seat (Service Key)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Service-API-Key", "value": "{{service_api_key}}" }],
+            "url": "{{base_url}}/api/v1/flights/{{flight_id}}/release_seat/"
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status 200', () => pm.response.code === 200);"] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Booking",
+      "item": [
+        {
+          "name": "Create Booking (Client)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{client_access_token}}" }
+            ],
+            "url": "{{base_url}}/api/v1/bookings/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"flight_id\": \"{{flight_id}}\",\n  \"passengers\": 1\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 201 or 409', () => [201,409].includes(pm.response.code));",
+                  "if (pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  pm.collectionVariables.set('booking_id', json.booking_id || json.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Bookings (Client)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_access_token}}" }],
+            "url": "{{base_url}}/api/v1/bookings/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.code === 200);",
+                  "const list = pm.response.json();",
+                  "pm.test('array', () => Array.isArray(list));",
+                  "if (Array.isArray(list) && list.length > 0) {",
+                  "  pm.collectionVariables.set('booking_id', list[0].booking_id || list[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Booking (Client)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_access_token}}" }],
+            "url": "{{base_url}}/api/v1/bookings/{{booking_id}}/"
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status 200 or 404', () => [200,404].includes(pm.response.code));"] } }
+          ]
+        },
+        {
+          "name": "Cancel Booking (Client)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_access_token}}" }],
+            "url": "{{base_url}}/api/v1/bookings/{{booking_id}}/"
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status 200 or 400 or 404', () => [200,400,404].includes(pm.response.code));"] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "List Notifications (Client)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_access_token}}" }],
+            "url": "{{base_url}}/api/v1/notifications/{{client_user_id}}/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status 200', () => pm.response.code === 200);",
+                  "const body = pm.response.json();",
+                  "const results = body.results || [];",
+                  "pm.test('shape', () => body.hasOwnProperty('count') && Array.isArray(results));",
+                  "if (results.length > 0) {",
+                  "  pm.collectionVariables.set('notification_id', results[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unread Count (Client)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_access_token}}" }],
+            "url": "{{base_url}}/api/v1/notifications/{{client_user_id}}/unread-count/"
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status 200', () => pm.response.code === 200);"] } }
+          ]
+        },
+        {
+          "name": "Mark Notification Read (Client)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_access_token}}" }],
+            "url": "{{base_url}}/api/v1/notifications/{{notification_id}}/read/"
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status 200 or 404', () => [200,404].includes(pm.response.code));"] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Docs & Schemas",
+      "item": [
+        { "name": "Booking Swagger UI", "request": { "method": "GET", "url": "{{base_url}}/api/docs/booking/" }, "event": [{ "listen": "test", "script": { "exec": ["pm.test('status 200', () => pm.response.code === 200);"] } }] },
+        { "name": "Booking Schema JSON", "request": { "method": "GET", "url": "{{base_url}}/api/schema/booking/" }, "event": [{ "listen": "test", "script": { "exec": ["pm.test('status 200', () => pm.response.code === 200);"] } }] },
+        { "name": "Notification Swagger UI", "request": { "method": "GET", "url": "{{base_url}}/api/docs/notification/swagger-ui/" }, "event": [{ "listen": "test", "script": { "exec": ["pm.test('status 200', () => pm.response.code === 200);"] } }] },
+        { "name": "Notification Schema JSON", "request": { "method": "GET", "url": "{{base_url}}/api/schema/notification/" }, "event": [{ "listen": "test", "script": { "exec": ["pm.test('status 200', () => pm.response.code === 200);"] } }] },
+        { "name": "Flight Swagger UI", "request": { "method": "GET", "url": "{{base_url}}/api/docs/swagger-ui/" }, "event": [{ "listen": "test", "script": { "exec": ["pm.test('status 200', () => pm.response.code === 200);"] } }] },
+        { "name": "Flight Redoc UI", "request": { "method": "GET", "url": "{{base_url}}/api/docs/redoc/" }, "event": [{ "listen": "test", "script": { "exec": ["pm.test('status 200', () => pm.response.code === 200);"] } }] },
+        { "name": "Flight Schema JSON", "request": { "method": "GET", "url": "{{base_url}}/api/schema/" }, "event": [{ "listen": "test", "script": { "exec": ["pm.test('status 200', () => pm.response.code === 200);"] } }] },
+        { "name": "User Swagger UI", "request": { "method": "GET", "url": "{{base_url}}/swagger/" }, "event": [{ "listen": "test", "script": { "exec": ["pm.test('status 200', () => pm.response.code === 200);"] } }] },
+        { "name": "User Redoc UI", "request": { "method": "GET", "url": "{{base_url}}/redoc/" }, "event": [{ "listen": "test", "script": { "exec": ["pm.test('status 200', () => pm.response.code === 200);"] } }] }
+      ]
+    },
+    {
+      "name": "Cleanup",
+      "item": [
+        {
+          "name": "Delete Flight (Admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "X-User-Id", "value": "{{admin_user_id}}" },
+              { "key": "X-User-Email", "value": "{{admin_email}}" },
+              { "key": "X-User-Role", "value": "ADMIN" }
+            ],
+            "url": "{{base_url}}/api/v1/flights/{{flight_id}}/"
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status 204 or 400', () => [204,400].includes(pm.response.code));"] } }
+          ]
+        },
+        {
+          "name": "Delete Origin Location (Admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "X-User-Id", "value": "{{admin_user_id}}" },
+              { "key": "X-User-Email", "value": "{{admin_email}}" },
+              { "key": "X-User-Role", "value": "ADMIN" }
+            ],
+            "url": "{{base_url}}/api/v1/locations/{{origin_location_id}}/"
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status 204 or 400', () => [204,400].includes(pm.response.code));"] } }
+          ]
+        },
+        {
+          "name": "Delete Destination Location (Admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "X-User-Id", "value": "{{admin_user_id}}" },
+              { "key": "X-User-Email", "value": "{{admin_email}}" },
+              { "key": "X-User-Role", "value": "ADMIN" }
+            ],
+            "url": "{{base_url}}/api/v1/locations/{{dest_location_id}}/"
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('status 204 or 400', () => [204,400].includes(pm.response.code));"] } }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "WebSocket",
+      "item": [
+        {
+          "name": "Notifications WS (Manual)",
+          "request": {
+            "method": "GET",
+            "url": "{{ws_base_url}}/ws/notifications/{{client_user_id}}/{{client_access_token}}/"
+          },
+          "description": "WebSocket endpoint defined in notification ASGI routing. Open manually in Postman’s WebSocket tab."
+        }
+      ]
+    }
+  ]
+}

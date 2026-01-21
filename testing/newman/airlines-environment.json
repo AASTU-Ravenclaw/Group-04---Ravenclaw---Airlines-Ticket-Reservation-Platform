@@ -1,0 +1,22 @@
+{
+  "id": "airlines-env",
+  "name": "airlines-cluster",
+  "values": [
+    { "key": "user_base", "value": "http://user-service.airlines.svc.cluster.local:8000", "enabled": true },
+    { "key": "flight_base", "value": "http://flight-service.airlines.svc.cluster.local:8000", "enabled": true },
+    { "key": "booking_base", "value": "http://booking-service.airlines.svc.cluster.local:8000", "enabled": true },
+    { "key": "notification_base", "value": "http://notification-service.airlines.svc.cluster.local:8000", "enabled": true },
+    { "key": "admin_user_id", "value": "00000000-0000-0000-0000-000000000001", "enabled": true },
+    { "key": "admin_email", "value": "admin@example.com", "enabled": true },
+    { "key": "client_user_id", "value": "11111111-1111-1111-1111-111111111111", "enabled": true },
+    { "key": "client_email", "value": "client@example.com", "enabled": true },
+    { "key": "run_suffix", "value": "", "enabled": true },
+    { "key": "origin_code", "value": "", "enabled": true },
+    { "key": "dest_code", "value": "", "enabled": true },
+    { "key": "flight_number", "value": "", "enabled": true },
+    { "key": "flight_id", "value": "", "enabled": true },
+    { "key": "booking_id", "value": "", "enabled": true },
+    { "key": "departure_time", "value": "", "enabled": true },
+    { "key": "arrival_time", "value": "", "enabled": true }
+  ]
+}

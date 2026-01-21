@@ -1,31 +1,32 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: main-ingress
+  name: public-ingress
   namespace: airlines
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
+  ingressClassName: traefik
   rules:
   - http:
       paths:
-      # 1. Booking Service (API + Swagger)
-      - path: /api/v1/bookings
+      # User Service (public auth + profile)
+      - path: /api/v1/auth
         pathType: Prefix
         backend:
           service:
-            name: booking-service
+            name: user-service
             port:
               number: 8000
-      - path: /api/docs/booking
+      - path: /api/v1/users
         pathType: Prefix
         backend:
           service:
-            name: booking-service
+            name: user-service
             port:
               number: 8000
-      
-      # 2. Flight Service
+
+      # Flight Service (public read; writes enforced by app)
       - path: /api/v1/flights
         pathType: Prefix
         backend:
@@ -41,23 +42,84 @@ spec:
             port:
               number: 8000
 
-      # 3. User Service
-      - path: /api/v1/users
+      # Swagger / Schema endpoints
+      - path: /api/docs/booking
+        pathType: Prefix
+        backend:
+          service:
+            name: booking-service
+            port:
+              number: 8000
+      - path: /api/schema/booking
+        pathType: Prefix
+        backend:
+          service:
+            name: booking-service
+            port:
+              number: 8000
+
+      - path: /api/docs/notification
+        pathType: Prefix
+        backend:
+          service:
+            name: notification-service
+            port:
+              number: 8000
+      - path: /api/schema/notification
+        pathType: Prefix
+        backend:
+          service:
+            name: notification-service
+            port:
+              number: 8000
+
+      # Notifications WebSocket
+      - path: /ws/notifications
+        pathType: Prefix
+        backend:
+          service:
+            name: notification-service
+            port:
+              number: 8000
+
+      - path: /api/docs/swagger-ui
+        pathType: Prefix
+        backend:
+          service:
+            name: flight-service
+            port:
+              number: 8000
+      - path: /api/docs/redoc
+        pathType: Prefix
+        backend:
+          service:
+            name: flight-service
+            port:
+              number: 8000
+      - path: /api/schema
+        pathType: Prefix
+        backend:
+          service:
+            name: flight-service
+            port:
+              number: 8000
+
+      - path: /swagger
         pathType: Prefix
         backend:
           service:
             name: user-service
             port:
               number: 8000
-      - path: /api/v1/auth
+      - path: /redoc
         pathType: Prefix
         backend:
           service:
             name: user-service
             port:
               number: 8000
-      
-      # 4. Frontend (Root)
+
+      # Frontend (Root)
       - path: /
         pathType: Prefix
         backend:
@@ -65,3 +127,34 @@ spec:
             name: frontend
             port:
               number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: protected-ingress
+  namespace: airlines
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.middlewares: airlines-auth-middleware@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+  - http:
+      paths:
+      # Booking Service (requires forward auth)
+      - path: /api/v1/bookings
+        pathType: Prefix
+        backend:
+          service:
+            name: booking-service
+            port:
+              number: 8000
+
+      # Notification Service (requires forward auth)
+      - path: /api/v1/notifications
+        pathType: Prefix
+        backend:
+          service:
+            name: notification-service
+            port:
+              number: 8000

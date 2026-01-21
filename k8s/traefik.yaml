@@ -20,6 +20,22 @@ rules:
       - list
       - watch
   - apiGroups:
+      - "traefik.containo.us"
+    resources:
+      - middlewares
+      - middlewaretcps
+      - ingressroutes
+      - ingressroutetcps
+      - ingressrouteudps
+      - traefikservices
+      - tlsoptions
+      - tlsstores
+      - serverstransports
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
       - extensions
       - networking.k8s.io
     resources:
@@ -72,11 +88,23 @@ spec:
         args:
         - --api.insecure=true
         - --providers.kubernetesingress
+        - --providers.kubernetescrd
         - --entrypoints.web.address=:80
+        - --accesslog=true
+        - --accesslog.format=json
+        - --metrics.prometheus=true
+        - --metrics.prometheus.addentrypointslabels=true
+        - --metrics.prometheus.addrouterslabels=true
+        - --metrics.prometheus.addserviceslabels=true
+        - --metrics.prometheus.entrypoint=web
+        - --tracing=true
+        - --tracing.jaeger=true
+        - --tracing.jaeger.collector.endpoint=http://jaeger.observability.svc.cluster.local:14268/api/traces
         - --log.level=DEBUG
         ports:
         - containerPort: 80
         - containerPort: 8080
+      volumes: []
 ---
 apiVersion: v1
 kind: Service
@@ -94,3 +122,23 @@ spec:
     port: 8080
     targetPort: 8080
   type: LoadBalancer
+---
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: traefik
+spec:
+  controller: traefik.io/ingress-controller
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: auth-middleware
+  namespace: airlines
+spec:
+  forwardAuth:
+    address: http://user-service.airlines.svc.cluster.local:8000/api/v1/auth/validate
+    authResponseHeaders:
+      - X-User-Id
+      - X-User-Email
+      - X-User-Role

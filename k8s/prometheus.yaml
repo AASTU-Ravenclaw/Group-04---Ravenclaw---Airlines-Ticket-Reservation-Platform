@@ -30,25 +30,25 @@ data:
       - job_name: 'user-service'
         static_configs:
           - targets: ['user-service.airlines.svc.cluster.local:8000']
-        metrics_path: '/metrics/metrics'
+        metrics_path: '/metrics'
         scrape_interval: 5s
 
       - job_name: 'flight-service'
         static_configs:
           - targets: ['flight-service.airlines.svc.cluster.local:8000']
-        metrics_path: '/metrics/metrics'
+        metrics_path: '/metrics'
         scrape_interval: 5s
 
       - job_name: 'booking-service'
         static_configs:
           - targets: ['booking-service.airlines.svc.cluster.local:8000']
-        metrics_path: '/metrics/metrics'
+        metrics_path: '/metrics'
         scrape_interval: 5s
 
       - job_name: 'notification-service'
         static_configs:
           - targets: ['notification-service.airlines.svc.cluster.local:8000']
-        metrics_path: '/metrics/metrics'
+        metrics_path: '/metrics'
         scrape_interval: 5s
 
       # Infrastructure metrics
@@ -79,6 +79,7 @@ data:
       - job_name: 'otel-collector'
         static_configs:
           - targets: ['otel-collector.observability.svc.cluster.local:8889']
+
 ---
 apiVersion: apps/v1
 kind: Deployment

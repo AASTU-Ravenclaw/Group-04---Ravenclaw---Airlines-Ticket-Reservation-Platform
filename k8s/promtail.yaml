@@ -55,6 +55,18 @@ data:
           __path__: /var/log/containers/*_airlines_*.log
       pipeline_stages:
       - docker: {}
+      - regex:
+          source: filename
+          expression: ^.*/(?P<pod_name>[^_]+)_(?P<namespace>[^_]+)_(?P<container_name>.+)-(?P<container_id>[^.]+)\.log$
+      - labels:
+          pod_name:
+          namespace:
+          container_name:
+      - template:
+          source: job
+          template: '{{ .namespace }}/{{ .pod_name }}'
+      - labels:
+          job:
       - match:
           selector: '{container_name="user-service"}'
           stages:
@@ -87,19 +99,6 @@ data:
           - labels:
               level:
               logger:
-      relabel_configs:
-      - action: replace
-        source_labels:
-        - __meta_kubernetes_pod_name
-        target_label: pod_name
-      - action: replace
-        source_labels:
-        - __meta_kubernetes_pod_container_name
-        target_label: container_name
-      - action: replace
-        source_labels:
-        - __meta_kubernetes_namespace
-        target_label: namespace
 ---
 apiVersion: apps/v1
 kind: DaemonSet

@@ -1,0 +1,303 @@
+{
+  "info": {
+    "name": "Airlines Integration",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const suffix = Date.now().toString().slice(-6);",
+          "pm.environment.set('run_suffix', suffix);",
+          "pm.environment.set('origin_code', 'ORG' + suffix);",
+          "pm.environment.set('dest_code', 'DST' + suffix);",
+          "pm.environment.set('flight_number', 'FN' + suffix);",
+          "const now = new Date();",
+          "const dep = new Date(now.getTime() + 60 * 60 * 1000);",
+          "const arr = new Date(now.getTime() + 4 * 60 * 60 * 1000);",
+          "pm.environment.set('departure_time', dep.toISOString());",
+          "pm.environment.set('arrival_time', arr.toISOString());"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "User Health",
+      "request": {
+        "method": "GET",
+        "url": "{{user_base}}/health/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status 200', () => pm.response.code === 200);",
+              "pm.test('healthy', () => pm.response.json().status === 'healthy');"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Flight Health",
+      "request": {
+        "method": "GET",
+        "url": "{{flight_base}}/health/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status 200', () => pm.response.code === 200);",
+              "pm.test('healthy', () => pm.response.json().status === 'healthy');"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Booking Health",
+      "request": {
+        "method": "GET",
+        "url": "{{booking_base}}/health/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status 200', () => pm.response.code === 200);",
+              "pm.test('healthy', () => pm.response.json().status === 'healthy');"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notification Health",
+      "request": {
+        "method": "GET",
+        "url": "{{notification_base}}/health/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status 200', () => pm.response.code === 200);",
+              "pm.test('healthy', () => pm.response.json().status === 'healthy');"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create Origin Location",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key": "Content-Type", "value": "application/json"},
+          {"key": "X-User-Id", "value": "{{admin_user_id}}"},
+          {"key": "X-User-Email", "value": "{{admin_email}}"},
+          {"key": "X-User-Role", "value": "ADMIN"}
+        ],
+        "url": "{{flight_base}}/api/v1/locations/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Origin {{run_suffix}}\",\n  \"airport_code\": \"{{origin_code}}\",\n  \"city\": \"Origin City\",\n  \"country\": \"US\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('created', () => pm.response.code === 201);",
+              "pm.environment.set('origin_location_id', pm.response.json().location_id || pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create Destination Location",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key": "Content-Type", "value": "application/json"},
+          {"key": "X-User-Id", "value": "{{admin_user_id}}"},
+          {"key": "X-User-Email", "value": "{{admin_email}}"},
+          {"key": "X-User-Role", "value": "ADMIN"}
+        ],
+        "url": "{{flight_base}}/api/v1/locations/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Destination {{run_suffix}}\",\n  \"airport_code\": \"{{dest_code}}\",\n  \"city\": \"Destination City\",\n  \"country\": \"US\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('created', () => pm.response.code === 201);",
+              "pm.environment.set('dest_location_id', pm.response.json().location_id || pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create Flight",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key": "Content-Type", "value": "application/json"},
+          {"key": "X-User-Id", "value": "{{admin_user_id}}"},
+          {"key": "X-User-Email", "value": "{{admin_email}}"},
+          {"key": "X-User-Role", "value": "ADMIN"}
+        ],
+        "url": "{{flight_base}}/api/v1/flights/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"flight_number\": \"{{flight_number}}\",\n  \"departure_location\": \"{{origin_code}}\",\n  \"arrival_location\": \"{{dest_code}}\",\n  \"departure_time\": \"{{departure_time}}\",\n  \"arrival_time\": \"{{arrival_time}}\",\n  \"total_seats\": 50,\n  \"available_seats\": 50,\n  \"price\": \"199.99\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('created or duplicate flight', () => [201,400].includes(pm.response.code));",
+              "if (pm.response.code === 201) { pm.environment.set('flight_id', pm.response.json().flight_id || pm.response.json().id); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List Flights (filtered)",
+      "request": {
+        "method": "GET",
+        "url": "{{flight_base}}/api/v1/flights/?origin={{origin_code}}&destination={{dest_code}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status 200', () => pm.response.code === 200);",
+              "var flights = pm.response.json();",
+              "pm.test('array returned', () => Array.isArray(flights));",
+              "pm.test('at least one flight returned', () => Array.isArray(flights) && flights.length >= 1);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create Booking",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key": "Content-Type", "value": "application/json"},
+          {"key": "X-User-Id", "value": "{{client_user_id}}"},
+          {"key": "X-User-Email", "value": "{{client_email}}"},
+          {"key": "X-User-Role", "value": "CLIENT"}
+        ],
+        "url": "{{booking_base}}/api/v1/bookings/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"flight_id\": \"{{flight_id}}\",\n  \"passengers\": 1\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('booking created', () => pm.response.code === 201);",
+              "pm.environment.set('booking_id', pm.response.json().booking_id || pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List Bookings",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key": "X-User-Id", "value": "{{client_user_id}}"},
+          {"key": "X-User-Email", "value": "{{client_email}}"},
+          {"key": "X-User-Role", "value": "CLIENT"}
+        ],
+        "url": "{{booking_base}}/api/v1/bookings/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status 200', () => pm.response.code === 200);",
+              "var bookings = pm.response.json();",
+              "pm.test('bookings array', () => Array.isArray(bookings));",
+              "pm.test('has at least one booking', () => Array.isArray(bookings) && bookings.length >= 1);",
+              "if (Array.isArray(bookings) && bookings.length > 0) { pm.environment.set('booking_id', bookings[0].booking_id || bookings[0].id); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cancel Booking",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {"key": "X-User-Id", "value": "{{client_user_id}}"},
+          {"key": "X-User-Email", "value": "{{client_email}}"},
+          {"key": "X-User-Role", "value": "CLIENT"}
+        ],
+        "url": "{{booking_base}}/api/v1/bookings/{{booking_id}}/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('cancelled or already cancelled', () => [200,400].includes(pm.response.code));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List Notifications",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key": "X-User-Id", "value": "{{client_user_id}}"}
+        ],
+        "url": "{{notification_base}}/api/v1/notifications/{{client_user_id}}/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status 200', () => pm.response.code === 200);",
+              "const body = pm.response.json();",
+              "const results = body.results || [];",
+              "pm.test('notifications response shape', () => body.hasOwnProperty('count') && Array.isArray(results));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

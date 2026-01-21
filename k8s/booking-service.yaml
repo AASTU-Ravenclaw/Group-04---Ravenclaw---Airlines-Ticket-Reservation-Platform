@@ -4,7 +4,7 @@ metadata:
   name: booking-service
   namespace: airlines
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: booking-service
@@ -115,7 +115,7 @@ metadata:
   name: booking-worker
   namespace: airlines
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: booking-worker

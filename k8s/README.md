@@ -50,9 +50,3 @@ This directory contains Kubernetes manifests equivalent to the docker-compose se
    - Traefik dashboard: Get the external IP of traefik service, port 8080
    - API Gateway: External IP of traefik service, port 80
    - Frontend: If exposed separately, or via traefik
-
-## Notes
-- Persistent volumes need to be provisioned by your cluster.
-- Images need to be built from the respective directories and pushed to a registry.
-- Logging services (Prometheus, Grafana, Loki, etc.) are commented out as per docker-compose.
-- Environment variables in secrets need to be base64 encoded.

@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: newman-airlines-tests
+  namespace: airlines
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: newman
+        image: postman/newman:alpine
+        command: ["/bin/sh", "-c"]
+        args:
+          - >-
+            newman run /etc/newman/*collection.json
+            -e /etc/newman/*environment.json
+            --reporters cli
+            --timeout-request 30000
+            --bail
+        volumeMounts:
+          - name: newman-tests
+            mountPath: /etc/newman
+      volumes:
+        - name: newman-tests
+          configMap:
+            name: newman-airlines-tests

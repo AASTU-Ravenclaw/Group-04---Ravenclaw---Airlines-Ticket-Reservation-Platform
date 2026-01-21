@@ -30,6 +30,23 @@ data:
         spike_limit_mib: 128
         check_interval: 5s
 
+      attributes:
+        actions:
+          - key: http.method
+            from_attribute: http.request.method
+            action: insert
+          - key: http.status_code
+            from_attribute: http.response.status_code
+            action: insert
+
+      transform:
+        error_mode: ignore
+        trace_statements:
+          - context: span
+            statements:
+              - set(status.code, 2) where attributes["http.status_code"] >= 400
+              - set(status.code, 1) where attributes["http.status_code"] < 400
+
     exporters:
       debug:
         verbosity: detailed
@@ -44,13 +61,10 @@ data:
 
     connectors:
       spanmetrics:
+        namespace: spanmetrics
         histogram:
           explicit:
             buckets: [2ms, 10ms, 50ms, 100ms, 200ms, 500ms, 1s, 2s, 5s]
-        dimensions:
-          - name: http.method
-            default: GET
-          - name: http.status_code
         dimensions_cache_size: 1000
         aggregation_temporality: "AGGREGATION_TEMPORALITY_CUMULATIVE"
 
@@ -58,11 +72,11 @@ data:
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [memory_limiter, batch]
+          processors: [memory_limiter, attributes, transform, batch]
           exporters: [debug, otlp/jaeger, spanmetrics]
 
         metrics:
-          receivers: [otlp, prometheus, spanmetrics]
+          receivers: [prometheus, spanmetrics]
           processors: [memory_limiter, batch]
           exporters: [debug, prometheus]
 
@@ -90,7 +104,7 @@ spec:
     spec:
       containers:
       - name: otel-collector
-        image: otel/opentelemetry-collector-contrib:latest
+        image: otel/opentelemetry-collector-contrib:0.92.0
         ports:
         - containerPort: 4317
           name: otlp-grpc

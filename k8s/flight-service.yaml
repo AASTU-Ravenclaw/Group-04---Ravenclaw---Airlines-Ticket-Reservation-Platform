@@ -4,7 +4,7 @@ metadata:
   name: flight-service
   namespace: airlines
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: flight-service

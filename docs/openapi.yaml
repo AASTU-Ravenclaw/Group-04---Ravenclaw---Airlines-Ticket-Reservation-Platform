@@ -1,382 +1,876 @@
 openapi: 3.0.3
 info:
-  title: Flight Ticket Booking System API
-  description: >
-    API specification for the Flight Ticket Booking System.
-    Routes traffic via an API Gateway to User, Flight, Booking, and Notification microservices.
-  version: 1.0.0
-
-
+  title: Airlines Public API
+  version: v1
+  description: |
+    Consolidated OpenAPI specification documenting endpoints that are publicly accessible and those requiring authentication.
+    Public: User Service auth endpoints, Flight Service read-only catalog, Health.
+    Auth required: Booking Service, Notification Service, Flight/Location write operations.
+servers:
+  - url: /
+    description: Relative server; use with ingress routing
+  - url: http://localhost
+    description: Local cluster via Traefik/Ingress
+  - url: https://your-domain.example
+    description: Production ingress domain
+tags:
+  - name: User Service
+    description: Authentication and user onboarding
+  - name: Flight Service
+    description: Public read-only flight and location catalog
+  - name: Health
+    description: Service health probes
 paths:
-  # ----------------------------
-  # AUTHENTICATION & USER MANAGEMENT
-  # ----------------------------
-  /auth/register:
+  /api/v1/auth/register:
     post:
-      tags: [Auth]
+      tags: [User Service]
       summary: Register a new user
+      description: Creates a user account. Public endpoint.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UserRegistration'
+              $ref: '#/components/schemas/UserRegistrationRequest'
       responses:
         '201':
-          description: User created successfully
+          description: User registered
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserResponse'
-
-  /auth/login:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Validation error
+  /api/v1/auth/login:
     post:
-      tags: [Auth]
-      summary: Authenticate user
+      tags: [User Service]
+      summary: Login and obtain JWT tokens
+      description: Returns access and refresh tokens. Public endpoint.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [email, password]
-              properties:
-                email: { type: string, format: email }
-                password: { type: string, format: password }
+              $ref: '#/components/schemas/LoginRequest'
       responses:
         '200':
           description: Login successful
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  token: { type: string }
-                  user: { $ref: '#/components/schemas/UserResponse' }
-
-  /users/{id}:
-    parameters:
-      - name: id
-        in: path
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+  /api/v1/auth/refresh:
+    post:
+      tags: [User Service]
+      summary: Refresh JWT access token
+      description: Exchanges a refresh token for a new access token. Public endpoint.
+      requestBody:
         required: true
-        schema: { type: string, format: uuid }
-    get:
-      tags: [Users]
-      summary: Get user profile details
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
       responses:
         '200':
-          description: User found
+          description: Token refreshed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserResponse'
-    put:
-      tags: [Users]
-      summary: Update user profile
+                $ref: '#/components/schemas/TokenRefreshResponse'
+        '401':
+          description: Invalid refresh token
+  /api/v1/auth/validate:
+    get:
+      tags: [User Service]
+      summary: Validate JWT for Traefik forward auth
+      description: Public endpoint that validates a Bearer token and returns user info in headers and body.
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+            example: Bearer <access_token>
+      responses:
+        '200':
+          description: Token valid
+          headers:
+            X-User-Id:
+              schema:
+                type: string
+            X-User-Email:
+              schema:
+                type: string
+            X-User-Role:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidateTokenResponse'
+        '401':
+          description: Token invalid
+
+  /api/v1/users/me:
+    get:
+      tags: [User Service]
+      summary: Get current user's profile
+      description: Returns profile for the authenticated user.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+    patch:
+      tags: [User Service]
+      summary: Update current user's profile
+      description: Updates allowed fields for the authenticated user.
+      security:
+        - BearerAuth: []
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               type: object
               properties:
-                full_name: { type: string }
-                password: { type: string }
+                first_name:
+                  type: string
+                last_name:
+                  type: string
       responses:
         '200':
-          description: Profile updated
+          description: Updated user profile
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserResponse'
-    delete:
-      tags: [Users]
-      summary: Delete user account
-      responses:
-        '204':
-          description: User deleted
-
-  # ----------------------------
-  # FLIGHT MANAGEMENT
-  # ----------------------------
-  /locations:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+  /api/v1/flights:
     get:
-      tags: [Flights]
-      summary: List all airport locations
-      responses:
-        '200':
-          description: List of locations
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Location'
-
-  /flights:
-    get:
-      tags: [Flights]
-      summary: Search for available flights
+      tags: [Flight Service]
+      summary: List flights
+      description: Public, read-only listing of flights with optional filters.
       parameters:
-        - name: from
-          in: query
-          description: Departure Location ID
-          schema: { type: string, format: uuid }
-        - name: to
-          in: query
-          description: Arrival Location ID
-          schema: { type: string, format: uuid }
-        - name: date
-          in: query
-          schema: { type: string, format: date }
+        - in: query
+          name: origin
+          schema:
+            type: string
+          description: Airport code or city for departure
+        - in: query
+          name: destination
+          schema:
+            type: string
+          description: Airport code or city for arrival
+        - in: query
+          name: date
+          schema:
+            type: string
+            format: date
+          description: Departure date (YYYY-MM-DD)
       responses:
         '200':
-          description: Search results
+          description: Array of flights
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/FlightResponse'
-    post:
-      tags: [Flights]
-      summary: (Admin) Create a new flight schedule
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/FlightCreateRequest'
-      responses:
-        '201':
-          description: Flight created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FlightResponse'
-
-  /flights/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema: { type: string, format: uuid }
+                  $ref: '#/components/schemas/Flight'
+  /api/v1/flights/{flight_id}:
     get:
-      tags: [Flights]
-      summary: Get flight details
+      tags: [Flight Service]
+      summary: Get flight by ID
+      description: Public, read-only flight details.
+      parameters:
+        - in: path
+          name: flight_id
+          required: true
+          schema:
+            type: string
+            format: uuid
       responses:
         '200':
-          description: Flight details
+          description: Flight
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FlightResponse'
+                $ref: '#/components/schemas/Flight'
+        '404':
+          description: Not found
     put:
-      tags: [Flights]
-      summary: (Admin) Update flight details
+      tags: [Flight Service]
+      summary: Update flight (admin only)
+      description: Requires `X-User-Role=ADMIN` via forward auth headers.
+      security:
+        - ForwardAuthUserId: []
+          ForwardAuthEmail: []
+          ForwardAuthRole: []
       requestBody:
+        required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/FlightCreateRequest'
+              $ref: '#/components/schemas/FlightUpdateRequest'
       responses:
         '200':
           description: Flight updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FlightResponse'
-    delete:
-      tags: [Flights]
-      summary: (Admin) Cancel/Remove a flight
-      responses:
-        '204':
-          description: Flight removed
-
-  # ----------------------------
-  # BOOKING MANAGEMENT
-  # ----------------------------
-  /bookings:
-    post:
-      tags: [Bookings]
-      summary: Create a permanent booking
-      description: Synchronously reserves seats. Returns error if full.
+                $ref: '#/components/schemas/Flight'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    patch:
+      tags: [Flight Service]
+      summary: Partially update flight (admin only)
+      description: Requires `X-User-Role=ADMIN` via forward auth headers.
+      security:
+        - ForwardAuthUserId: []
+          ForwardAuthEmail: []
+          ForwardAuthRole: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BookingRequest'
-      responses:
-        '201':
-          description: Booking Confirmed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BookingResponse'
-        '409':
-          description: Flight fully booked or unavailable
-
-  /bookings/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema: { type: string, format: uuid }
-    get:
-      tags: [Bookings]
-      summary: Get booking details
+              $ref: '#/components/schemas/FlightUpdateRequest'
       responses:
         '200':
-          description: Booking found
+          description: Flight updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BookingResponse'
+                $ref: '#/components/schemas/Flight'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
     delete:
-      tags: [Bookings]
-      summary: Cancel a booking
+      tags: [Flight Service]
+      summary: Delete flight (admin only)
+      description: Only allowed if no seats are booked. Requires admin role.
+      security:
+        - ForwardAuthUserId: []
+          ForwardAuthEmail: []
+          ForwardAuthRole: []
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          description: Cannot delete flight with booked seats
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/flights/{flight_id}/reserve_seat/:
+    post:
+      tags: [Flight Service]
+      summary: Reserve a seat (service-to-service)
+      description: Requires `X-Service-API-Key` header. No body.
+      security:
+        - ServiceApiKey: []
       responses:
         '200':
-          description: Booking cancelled
+          description: Seat reserved
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  status: { type: string, example: "CANCELLED" }
+                  message:
+                    type: string
+                  remaining_seats:
+                    type: integer
+        '409':
+          description: Flight is full
+        '400':
+          description: Bad request
 
-  /bookings/user/{uid}:
-    parameters:
-      - name: uid
-        in: path
-        required: true
-        schema: { type: string, format: uuid }
-    get:
-      tags: [Bookings]
-      summary: Retrieve booking history for a user
+  /api/v1/flights/{flight_id}/release_seat/:
+    post:
+      tags: [Flight Service]
+      summary: Release a seat (service-to-service)
+      description: Requires `X-Service-API-Key` header. No body.
+      security:
+        - ServiceApiKey: []
       responses:
         '200':
-          description: User booking history
+          description: Seat released
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  remaining_seats:
+                    type: integer
+        '400':
+          description: Bad request
+  /api/v1/locations:
+    get:
+      tags: [Flight Service]
+      summary: List locations
+      description: Public, read-only listing of locations.
+      responses:
+        '200':
+          description: Array of locations
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/BookingResponse'
-
-  # ----------------------------
-  # NOTIFICATIONS
-  # ----------------------------
-  /notifications/{uid}:
-    parameters:
-      - name: uid
-        in: path
+                  $ref: '#/components/schemas/Location'
+    post:
+      tags: [Flight Service]
+      summary: Create location (admin only)
+      description: Requires `X-User-Role=ADMIN` via forward auth headers.
+      security:
+        - ForwardAuthUserId: []
+          ForwardAuthEmail: []
+          ForwardAuthRole: []
+      requestBody:
         required: true
-        schema: { type: string, format: uuid }
-    get:
-      tags: [Notifications]
-      summary: View notification history for a user
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Location'
       responses:
-        '200':
-          description: List of notifications
+        '201':
+          description: Created
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Notification'
-
-  /notifications/{id}:
-    parameters:
-      - name: id
-        in: path
+                $ref: '#/components/schemas/Location'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /api/v1/locations/{location_id}:
+    get:
+      tags: [Flight Service]
+      summary: Get location by ID
+      description: Public, read-only location details.
+      parameters:
+        - in: path
+          name: location_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+        '404':
+          description: Not found
+    put:
+      tags: [Flight Service]
+      summary: Update location (admin only)
+      security:
+        - ForwardAuthUserId: []
+          ForwardAuthEmail: []
+          ForwardAuthRole: []
+      requestBody:
         required: true
-        schema: { type: string, format: uuid }
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Location'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    patch:
+      tags: [Flight Service]
+      summary: Partially update location (admin only)
+      security:
+        - ForwardAuthUserId: []
+          ForwardAuthEmail: []
+          ForwardAuthRole: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Location'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
     delete:
-      tags: [Notifications]
-      summary: Dismiss/Delete a notification
+      tags: [Flight Service]
+      summary: Delete location (admin only)
+      description: Prevented if used by any flight.
+      security:
+        - ForwardAuthUserId: []
+          ForwardAuthEmail: []
+          ForwardAuthRole: []
       responses:
         '204':
-          description: Notification deleted
+          description: Deleted
+        '400':
+          description: Cannot delete location in use
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
 
-# ----------------------------
-# DATA MODELS (SCHEMAS)
-# ----------------------------
+  /api/v1/bookings:
+    get:
+      tags: [Booking Service]
+      summary: List bookings for current user
+      description: Returns bookings filtered to the authenticated user. Optional `flight_id` filter.
+      security:
+        - ForwardAuthUserId: []
+          ForwardAuthEmail: []
+          ForwardAuthRole: []
+      parameters:
+        - in: query
+          name: flight_id
+          schema:
+            type: string
+            format: uuid
+          description: Filter bookings by flight ID
+      responses:
+        '200':
+          description: Array of bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Booking'
+        '401':
+          description: Unauthorized
+    post:
+      tags: [Booking Service]
+      summary: Create booking
+      description: Reserves seats via Flight Service and creates a booking.
+      security:
+        - ForwardAuthUserId: []
+          ForwardAuthEmail: []
+          ForwardAuthRole: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingCreateRequest'
+      responses:
+        '201':
+          description: Booking created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '400':
+          description: Validation error
+        '409':
+          description: Seat reservation failed
+
+  /api/v1/bookings/{booking_id}:
+    get:
+      tags: [Booking Service]
+      summary: Get booking by ID
+      security:
+        - ForwardAuthUserId: []
+          ForwardAuthEmail: []
+          ForwardAuthRole: []
+      parameters:
+        - in: path
+          name: booking_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Booking
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+    delete:
+      tags: [Booking Service]
+      summary: Cancel booking
+      description: Cancels booking, releasing seats if flight not departed.
+      security:
+        - ForwardAuthUserId: []
+          ForwardAuthEmail: []
+          ForwardAuthRole: []
+      parameters:
+        - in: path
+          name: booking_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Booking cancelled
+        '400':
+          description: Already cancelled or cannot cancel after departure
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+
+  /api/v1/notifications/{user_id}/:
+    get:
+      tags: [Notification Service]
+      summary: List notifications for a user
+      description: Requires forward auth header `X-User-Id` matching the path `user_id`.
+      security:
+        - ForwardAuthUserId: []
+      parameters:
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated notifications
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPage'
+        '403':
+          description: Unauthorized (mismatched user)
+
+  /api/v1/notifications/{user_id}/unread-count/:
+    get:
+      tags: [Notification Service]
+      summary: Get unread notification count
+      description: Requires forward auth header `X-User-Id` matching the path `user_id`.
+      security:
+        - ForwardAuthUserId: []
+      parameters:
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  unread_count:
+                    type: integer
+        '403':
+          description: Unauthorized (mismatched user)
+
+  /api/v1/notifications/{id}/read/:
+    patch:
+      tags: [Notification Service]
+      summary: Mark notification as read
+      description: Requires forward auth header `X-User-Id` of the owner.
+      security:
+        - ForwardAuthUserId: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+        '403':
+          description: Unauthorized
+        '404':
+          description: Not found
+  /health:
+    get:
+      tags: [Health]
+      summary: Service health check
+      description: Public health endpoint provided by each service.
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    ForwardAuthUserId:
+      type: apiKey
+      in: header
+      name: X-User-Id
+      description: Forward-auth header set by Traefik after validating JWT
+    ForwardAuthEmail:
+      type: apiKey
+      in: header
+      name: X-User-Email
+      description: Forward-auth header set by Traefik after validating JWT
+    ForwardAuthRole:
+      type: apiKey
+      in: header
+      name: X-User-Role
+      description: Forward-auth header indicating user role (ADMIN/CLIENT)
+    ServiceApiKey:
+      type: apiKey
+      in: header
+      name: X-Service-API-Key
+      description: Internal service-to-service API key
   schemas:
-    # User Schemas
-    UserRegistration:
-      type: object
-      required: [full_name, email, password]
-      properties:
-        full_name: { type: string, example: "John Doe" }
-        email: { type: string, format: email, example: "john@example.com" }
-        password: { type: string, format: password, example: "securePass123" }
-    
-    UserResponse:
-      type: object
-      properties:
-        user_id: { type: string, format: uuid }
-        full_name: { type: string }
-        email: { type: string, format: email }
-        created_at: { type: string, format: date-time }
-
-    # Flight Schemas
     Location:
       type: object
       properties:
-        location_id: { type: string, format: uuid }
-        name: { type: string, example: "Addis Ababa" }
-        airport_code: { type: string, example: "ADD" }
-
-    FlightCreateRequest:
+        location_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        airport_code:
+          type: string
+        city:
+          type: string
+        country:
+          type: string
+    Flight:
       type: object
-      required: [flight_number, departure_location_id, arrival_location_id, departure_time, total_seats]
       properties:
-        flight_number: { type: string, example: "ET-500" }
-        departure_location_id: { type: string, format: uuid }
-        arrival_location_id: { type: string, format: uuid }
-        departure_time: { type: string, format: date-time }
-        arrival_time: { type: string, format: date-time }
-        total_seats: { type: integer, example: 150 }
-
-    FlightResponse:
-      allOf:
-        - $ref: '#/components/schemas/FlightCreateRequest'
-        - type: object
-          properties:
-            flight_id: { type: string, format: uuid }
-            available_seats: { type: integer }
-
-    # Booking Schemas
-    BookingRequest:
+        flight_id:
+          type: string
+          format: uuid
+        flight_number:
+          type: string
+        departure_location:
+          $ref: '#/components/schemas/Location'
+        arrival_location:
+          $ref: '#/components/schemas/Location'
+        departure_time:
+          type: string
+          format: date-time
+        arrival_time:
+          type: string
+          format: date-time
+        total_seats:
+          type: integer
+        available_seats:
+          type: integer
+        price:
+          type: string
+          description: Decimal string
+        status:
+          type: string
+          enum: [scheduled, delayed, boarding, departed, cancelled]
+    FlightUpdateRequest:
       type: object
-      required: [user_id, flight_id, passengers]
       properties:
-        user_id: { type: string, format: uuid }
-        flight_id: { type: string, format: uuid }
-        passengers:
+        departure_time:
+          type: string
+          format: date-time
+        arrival_time:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [scheduled, delayed, boarding, departed, cancelled]
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [ADMIN, CLIENT]
+    UserRegistrationRequest:
+      type: object
+      required: [first_name, last_name, email, password]
+      properties:
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+        role:
+          type: string
+          enum: [ADMIN, CLIENT]
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+    LoginResponse:
+      type: object
+      properties:
+        access:
+          type: string
+        refresh:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+    TokenRefreshRequest:
+      type: object
+      required: [refresh]
+      properties:
+        refresh:
+          type: string
+    TokenRefreshResponse:
+      type: object
+      properties:
+        access:
+          type: string
+    ValidateTokenResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        user_id:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [ADMIN, CLIENT]
+    Booking:
+      type: object
+      properties:
+        booking_id:
+          type: string
+          format: uuid
+        flight_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [CONFIRMED, CANCELLED]
+        booking_date:
+          type: string
+          format: date-time
+        passengers_details:
           type: array
           items:
-            type: object
-            properties:
-              full_name: { type: string }
-              email: { type: string }
-
-    BookingResponse:
+            $ref: '#/components/schemas/Passenger'
+    Passenger:
       type: object
       properties:
-        booking_id: { type: string, format: uuid }
-        flight_id: { type: string, format: uuid }
-        status: { type: string, enum: [CONFIRMED, CANCELLED] }
-        passenger_count: { type: integer }
-        created_at: { type: string, format: date-time }
-
-    # Notification Schemas
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+        passport_number:
+          type: string
+    BookingCreateRequest:
+      type: object
+      required: [flight_id]
+      properties:
+        flight_id:
+          type: string
+          format: uuid
+        passengers:
+          type: integer
+          minimum: 1
+          maximum: 10
+          description: Number of passengers if not providing detailed list
+        passengers_list:
+          type: array
+          description: Detailed passenger info (overrides passengers count)
+          items:
+            $ref: '#/components/schemas/Passenger'
     Notification:
       type: object
       properties:
-        notification_id: { type: string, format: uuid }
-        type: { type: string, enum: [BOOKING_CONFIRMATION, BOOKING_CANCELLATION] }
-        message: { type: string }
-        sent_at: { type: string, format: date-time }
+        id:
+          type: string
+        user_id:
+          type: string
+        message:
+          type: string
+        event_type:
+          type: string
+        is_read:
+          type: boolean
+        timestamp:
+          type: string
+    NotificationPage:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          nullable: true
+        previous:
+          type: string
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
