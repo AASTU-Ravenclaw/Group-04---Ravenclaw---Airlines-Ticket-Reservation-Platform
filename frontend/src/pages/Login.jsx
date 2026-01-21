@@ -1,6 +1,7 @@
 import React, { useState, useContext } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import AuthContext from "../context/AuthContext";
+import toast from "react-hot-toast";
 
 const Login = () => {
   const { login } = useContext(AuthContext);
@@ -16,9 +17,8 @@ const Login = () => {
     const success = await login(email, pwd);
     if (success) {
       navigate(from, { replace: true });
-    } else {
-      alert("Invalid Credentials");
     }
+    // Error is handled in Authcontext now with toast
   };
 
   return (

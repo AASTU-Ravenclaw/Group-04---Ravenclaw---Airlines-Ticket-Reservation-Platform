@@ -10,7 +10,13 @@ const Home = () => {
   const [filters, setFilters] = useState({ from: "", to: "", date: "" });
 
   const fetchFlights = async () => {
-    const res = await api.get("/flights/", { params: filters });
+    const res = await api.get("/flights/", { 
+      params: { ...filters, _t: Math.random() },
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    });
     setFlights(res.data);
   };
 

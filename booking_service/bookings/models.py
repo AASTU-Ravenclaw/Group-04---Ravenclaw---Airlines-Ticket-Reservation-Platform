@@ -13,6 +13,9 @@ class Booking(models.Model):
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='CONFIRMED')
     booking_date = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-booking_date']
     
     def __str__(self):
         return f"Booking {self.booking_id} - {self.status}"

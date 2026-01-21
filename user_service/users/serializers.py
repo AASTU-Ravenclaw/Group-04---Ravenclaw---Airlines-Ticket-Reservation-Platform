@@ -10,6 +10,9 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         fields = ('id', 'first_name', 'last_name', 'email', 'password', 'role')
         read_only_fields = ('id',)
 
+    def validate_email(self, value):
+        return value.lower()
+
     def create(self, validated_data):
         # We use the manager's create_user method to ensure password hashing
         return User.objects.create_user(
@@ -27,6 +30,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'email', 'role', 'created_at')
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        attrs['email'] = attrs.get('email', '').lower()
+        return super().validate(attrs)
+
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)

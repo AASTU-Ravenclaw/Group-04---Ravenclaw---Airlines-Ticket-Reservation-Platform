@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import RegisterView, CustomLoginView, CustomRefreshView, UserProfileView, validate_token
+from .views import RegisterView, CustomLoginView, CustomRefreshView, UserProfileView, validate_token, health_check
 
 urlpatterns = [
     # Auth Endpoints
@@ -11,4 +11,7 @@ urlpatterns = [
     # Profile Endpoint
     # Using 'me' instead of ID since the token already identifies the user
     path('users/me', UserProfileView.as_view(), name='profile'),
+    
+    # Health Check
+    path('health/', health_check, name='health_check'),
 ]

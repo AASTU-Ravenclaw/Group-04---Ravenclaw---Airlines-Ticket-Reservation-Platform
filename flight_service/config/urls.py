@@ -1,6 +1,8 @@
 from django.contrib import admin
 from django.urls import path, include, re_path
 from django.http import JsonResponse
+from django.conf.urls.static import static
+from django.conf import settings
 from rest_framework.routers import DefaultRouter
 from flights.views import LocationViewSet, FlightViewSet
 
@@ -41,6 +43,7 @@ urlpatterns = [
     
     # Health Check
     path('health/', health_check, name='health_check'),
+    path('', include('django_prometheus.urls')),
     
     # --- DRF-YASG DOCUMENTATION ENDPOINTS ---
     
@@ -52,4 +55,4 @@ urlpatterns = [
     
     # 5. Redoc UI
     re_path(r'^api/docs/redoc/$', schema_view.with_ui('redoc', cache_timeout=0), name='redoc'),
-]
+] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../api/axios";
+import toast from "react-hot-toast";
 
 const Register = () => {
   const navigate = useNavigate();
@@ -11,7 +12,7 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (formData.password !== formData.confirmPassword) {
-      alert("Passwords do not match!");
+      toast.error("Passwords do not match!");
       return;
     }
 
@@ -26,10 +27,10 @@ const Register = () => {
       };
       
       await api.post("/auth/register", registerData);
-      alert("Registration Successful!");
+      toast.success("Registration Successful!");
       navigate("/login");
     } catch (err) {
-      alert("Error registering: " + JSON.stringify(err.response?.data) || err.message);
+      toast.error("Error registering: " + (JSON.stringify(err.response?.data) || err.message));
     }
   };
 

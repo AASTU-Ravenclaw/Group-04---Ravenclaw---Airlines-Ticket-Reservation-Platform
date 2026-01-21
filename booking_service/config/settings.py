@@ -1,13 +1,24 @@
 import os
 from pathlib import Path
+import logging
+
+# Import OpenTelemetry configuration
+try:
+    import config.otel  # noqa
+except ImportError:
+    pass  # OpenTelemetry not available
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dev-key')
 
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ['*']
+
+# Security settings for Kubernetes
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 APPEND_SLASH = False
 
@@ -22,12 +33,16 @@ INSTALLED_APPS = [
     'rest_framework',
     'drf_yasg',
     'corsheaders',
+    'django_prometheus',
+    'whitenoise',
     
     'bookings',
 ]
 
 MIDDLEWARE = [
+    'django_prometheus.middleware.PrometheusBeforeMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -35,6 +50,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -66,20 +82,37 @@ DATABASES = {
 # REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'bookings.authentication.RemoteJWTAuthentication',
+        'bookings.authentication.HeaderAuthentication',
     ],
 }
 
 # DRF YASG Configuration
 SWAGGER_SETTINGS = {
     'SECURITY_DEFINITIONS': {
-        'Bearer': {
+        'X-User-Id': {
             'type': 'apiKey',
-            'name': 'Authorization',
+            'name': 'X-User-Id',
             'in': 'header',
-            'description': 'Bearer token in the format "Bearer <token>"'
+            'description': 'User ID header set by authentication middleware'
+        },
+        'X-User-Email': {
+            'type': 'apiKey',
+            'name': 'X-User-Email',
+            'in': 'header',
+            'description': 'User email header set by authentication middleware'
+        },
+        'X-User-Role': {
+            'type': 'apiKey',
+            'name': 'X-User-Role',
+            'in': 'header',
+            'description': 'User role header set by authentication middleware'
         }
     },
+    'SECURITY_REQUIREMENTS': [
+        {'X-User-Id': []},
+        {'X-User-Email': []},
+        {'X-User-Role': []}
+    ],
     'DOC_EXPANSION': 'none',
 }
 
@@ -90,7 +123,9 @@ FLIGHT_SERVICE_URL = os.environ.get('FLIGHT_SERVICE_URL', 'http://flight-service
 SERVICE_API_KEY = os.environ.get('SERVICE_API_KEY', 'dev-service-key-12345')
 
 # RabbitMQ Settings
-RABBITMQ_URL = os.environ.get('RABBITMQ_URL', 'amqp://guest:guest@rabbitmq:5672/')
+RABBITMQ_USER = os.environ.get('RABBITMQ_DEFAULT_USER', 'guest')
+RABBITMQ_PASS = os.environ.get('RABBITMQ_DEFAULT_PASS', 'guest')
+RABBITMQ_URL = f'amqp://{RABBITMQ_USER}:{RABBITMQ_PASS}@rabbitmq.airlines.svc.cluster.local:5672/'
 
 # CORS settings for frontend access
 CORS_ALLOWED_ORIGINS = [
@@ -123,4 +158,71 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Logging Configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'json': {
+            'format': '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "message": "%(message)s", "module": "%(module)s", "function": "%(funcName)s", "line": %(lineno)d}',
+            'class': 'pythonjsonlogger.jsonlogger.JsonFormatter',
+        },
+        'structured': {
+            'format': '{asctime} {levelname} {name} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'structured',
+        },
+        'file': {
+            'class': 'logging.FileHandler',
+            'filename': '/app/logs/booking_service.log',
+            'formatter': 'json',
+        },
+    },
+    'root': {
+        'handlers': ['console', 'file'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'bookings': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'opentelemetry': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
+
+# OpenTelemetry Configuration
+OPENTELEMETRY = {
+    'SERVICE_NAME': 'booking-service',
+    'SERVICE_VERSION': '1.0.0',
+    'OTLP_ENDPOINT': os.environ.get('OTLP_ENDPOINT', 'http://otel-collector.observability.svc.cluster.local:4318'),
+    'TRACES_EXPORTER': 'otlp',
+    'METRICS_EXPORTER': 'otlp',
+    'LOGS_EXPORTER': 'otlp',
+}
+
+# Create logs directory
+os.makedirs('/app/logs', exist_ok=True)

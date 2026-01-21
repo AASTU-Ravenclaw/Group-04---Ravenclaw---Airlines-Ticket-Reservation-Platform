@@ -1,6 +1,9 @@
 import axios from 'axios';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:801/api/v1';
+// In Kubernetes with Ingress, we want to use relative paths so the request goes to the Ingress Controller (Traefik).
+// However, for local development (npm run dev), we might want a specific URL.
+// We prefer the relative path '/api/v1' to avoid hardcoded IPs.
+const BASE_URL = import.meta.env.DEV ? (import.meta.env.VITE_API_URL || 'http://localhost:801/api/v1') : '/api/v1';
 
 const api = axios.create({
   baseURL: BASE_URL,

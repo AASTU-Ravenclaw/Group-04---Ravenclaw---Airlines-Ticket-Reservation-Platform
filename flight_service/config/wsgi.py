@@ -13,4 +13,10 @@ from django.core.wsgi import get_wsgi_application
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
+try:
+    from config.otel import setup_opentelemetry
+    setup_opentelemetry()
+except Exception as e:
+    print(f"Failed to setup OTEL in WSGI: {e}")
+
 application = get_wsgi_application()

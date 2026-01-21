@@ -1,0 +1,253 @@
+import os
+from pathlib import Path
+import mongoengine
+import logging
+
+# Import OpenTelemetry configuration
+try:
+    import config.otel  # noqa
+except ImportError:
+    pass  # OpenTelemetry not available
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dev-key')
+DEBUG = False
+ALLOWED_HOSTS = ['*']
+
+# Security settings for Kubernetes
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    
+    'rest_framework',
+    'corsheaders',
+    'drf_yasg',
+    'channels',
+    'django_prometheus',
+
+    'notifications',
+]
+
+MIDDLEWARE = [
+    'django_prometheus.middleware.PrometheusBeforeMiddleware',
+    'django.middleware.security.SecurityMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_prometheus.middleware.PrometheusAfterMiddleware',
+]
+
+ROOT_URLCONF = 'config.urls'
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
+]
+
+REST_FRAMEWORK = {
+}
+
+# DRF YASG Configuration
+SWAGGER_SETTINGS = {
+    'SECURITY_DEFINITIONS': {
+        'X-User-Id': {
+            'type': 'apiKey',
+            'name': 'X-User-Id',
+            'in': 'header',
+            'description': 'User ID header set by authentication middleware'
+        },
+        'X-User-Email': {
+            'type': 'apiKey',
+            'name': 'X-User-Email',
+            'in': 'header',
+            'description': 'User email header set by authentication middleware'
+        },
+        'X-User-Role': {
+            'type': 'apiKey',
+            'name': 'X-User-Role',
+            'in': 'header',
+            'description': 'User role header set by authentication middleware'
+        }
+    },
+    'SECURITY_REQUIREMENTS': [
+        {'X-User-Id': []},
+        {'X-User-Email': []},
+        {'X-User-Role': []}
+    ],
+    'USE_SESSION_AUTH': False,
+    'DOC_EXPANSION': 'none',
+}
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
+}
+
+# ASGI application
+ASGI_APPLICATION = 'config.asgi.application'
+
+# Channels
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [os.environ.get('REDIS_URL', 'redis://localhost:6379/0')],
+        },
+    },
+}
+
+MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27017/notification_db')
+# mongoengine.connect(host=MONGO_URI)  # Commented out to avoid double connection
+
+# RabbitMQ URL
+RABBITMQ_USER = os.environ.get('RABBITMQ_DEFAULT_USER', 'guest')
+RABBITMQ_PASS = os.environ.get('RABBITMQ_DEFAULT_PASS', 'guest')
+RABBITMQ_URL = f'amqp://{RABBITMQ_USER}:{RABBITMQ_PASS}@rabbitmq.airlines.svc.cluster.local:5672/'
+
+# CORS settings for frontend access
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+]
+
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# General Settings
+LANGUAGE_CODE = 'en-us'
+TIME_ZONE = 'UTC'
+USE_I18N = True
+USE_TZ = True
+STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# MongoDB connection
+mongo_username = os.environ.get('MONGO_USERNAME')
+mongo_password = os.environ.get('MONGO_PASSWORD')
+mongo_host = 'mongo-notification.airlines.svc.cluster.local'
+mongo_port = 27017
+mongo_db = 'notification_db'
+mongo_uri = f'mongodb://{mongo_username}:{mongo_password}@{mongo_host}:{mongo_port}/{mongo_db}'
+
+try:
+    mongoengine.disconnect(alias='default')
+except:
+    pass
+
+mongoengine.connect(
+    db=mongo_db,
+    username=mongo_username,
+    password=mongo_password,
+    host=mongo_host,
+    port=mongo_port,
+    authentication_source='admin',
+    alias='default'
+)
+
+# Logging Configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'json': {
+            'format': '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "message": "%(message)s", "module": "%(module)s", "function": "%(funcName)s", "line": %(lineno)d}',
+            'class': 'pythonjsonlogger.jsonlogger.JsonFormatter',
+        },
+        'structured': {
+            'format': '{asctime} {levelname} {name} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'structured',
+        },
+        'file': {
+            'class': 'logging.FileHandler',
+            'filename': '/app/logs/notification_service.log',
+            'formatter': 'json',
+        },
+    },
+    'root': {
+        'handlers': ['console', 'file'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'notifications': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'opentelemetry': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
+
+# OpenTelemetry Configuration
+OPENTELEMETRY = {
+    'SERVICE_NAME': 'notification-service',
+    'SERVICE_VERSION': '1.0.0',
+    'OTLP_ENDPOINT': os.environ.get('OTLP_ENDPOINT', 'http://otel-collector.observability.svc.cluster.local:4318'),
+    'TRACES_EXPORTER': 'otlp',
+    'METRICS_EXPORTER': 'otlp',
+    'LOGS_EXPORTER': 'otlp',
+}
+
+# Create logs directory
+os.makedirs('/app/logs', exist_ok=True)

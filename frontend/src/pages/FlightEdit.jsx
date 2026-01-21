@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "../api/axios";
+import toast from "react-hot-toast";
 
 const FlightEdit = () => {
   const { flightId } = useParams();
@@ -27,7 +28,7 @@ const FlightEdit = () => {
       setArrivalTime(new Date(flightData.arrival_time).toISOString().slice(0, 16));
     } catch (err) {
       console.error("Error fetching flight:", err);
-      alert("Error loading flight details");
+      toast.error("Error loading flight details");
     } finally {
       setLoading(false);
     }
@@ -36,17 +37,30 @@ const FlightEdit = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (flight.status === 'departed') {
-      return alert("Cannot edit a flight that has departed");
+      return toast.error("Cannot edit a flight that has departed");
+    }
+
+    // Validation
+    const currentDeparture = new Date(flight.departure_time);
+    const newDeparture = new Date(departure_time);
+    const newArrival = new Date(arrival_time);
+
+    if (newDeparture < currentDeparture) {
+      return toast.error("Departure time can only be delayed, not moved earlier.");
+    }
+
+    if (newArrival <= newDeparture) {
+      return toast.error("Arrival time must be after departure time.");
     }
 
     setSaving(true);
     try {
       await api.patch(`/flights/${flightId}/`, { status, departure_time, arrival_time });
-      alert("Flight updated successfully");
+      toast.success("Flight updated successfully");
       navigate("/admin/flights");
     } catch (err) {
       console.error("Error updating flight:", err);
-      alert("Error updating flight status");
+      toast.error("Error updating flight status");
     } finally {
       setSaving(false);
     }

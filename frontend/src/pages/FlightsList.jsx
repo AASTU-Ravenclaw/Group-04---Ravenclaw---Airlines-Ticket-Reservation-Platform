@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/axios";
+import toast from "react-hot-toast";
 
 const FlightsList = () => {
   const [flights, setFlights] = useState([]);
@@ -11,7 +12,7 @@ const FlightsList = () => {
     setLoading(true);
     try {
       const res = await api.get("/flights/", {
-        params: { ...filters, _t: Date.now() },
+        params: { ...filters, _t: Math.random() },
         headers: {
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache'
@@ -35,7 +36,7 @@ const FlightsList = () => {
       await api.delete(`/flights/${flightId}/`);
       fetchFlights();
     } catch (err) {
-      alert("Error deleting flight");
+      toast.error("Error deleting flight");
     }
   };
 

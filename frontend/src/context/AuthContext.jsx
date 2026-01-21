@@ -1,4 +1,6 @@
 import { createContext, useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import api from "../api/axios";
 
 const AuthContext = createContext({});
@@ -6,6 +8,7 @@ const AuthContext = createContext({});
 export const AuthProvider = ({ children }) => {
   const [auth, setAuth] = useState({});
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem("user"));
@@ -32,6 +35,7 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       console.error("Login failed:", error);
+      toast.error(error.response?.data?.detail || "Login failed. Please check your credentials.");
     }
     return false;
   };
@@ -39,7 +43,8 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     localStorage.clear();
     setAuth({});
-    window.location.href = "/login";
+    navigate("/login");
+    toast.success("Logged out successfully");
   };
 
   return (

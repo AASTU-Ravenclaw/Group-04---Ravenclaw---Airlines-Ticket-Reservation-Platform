@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/axios";
+import toast from "react-hot-toast";
+import AuthContext from "../context/AuthContext";
 
 const AdminDashboard = () => {
+  const { auth } = useContext(AuthContext);
   const [locations, setLocations] = useState([]);
   
   // Forms State
@@ -17,25 +20,45 @@ const AdminDashboard = () => {
   const [editingLocId, setEditingLocId] = useState(null);
 
   useEffect(() => {
-    fetchLocations();
-  }, []);
+    // Only fetch if admin; regular users shouldn't hit protected endpoints
+    if (auth.user?.role === "ADMIN") {
+      fetchLocations();
+    }
+  }, [auth.user]);
 
   const fetchLocations = async () => {
-    const res = await api.get("/locations/");
-    setLocations(res.data);
+    try {
+      const res = await api.get("/locations/");
+      setLocations(res.data);
+    } catch (err) {
+      console.error("Error fetching locations:", err);
+      toast.error("Failed to load locations");
+    }
   };
 
   // --- Location Handlers ---
   const handleLocSubmit = async (e) => {
     e.preventDefault();
-    if (editingLocId) {
-      await api.patch(`/locations/${editingLocId}/`, locForm);
-      setEditingLocId(null);
-    } else {
-      await api.post("/locations/", locForm);
+    if (auth.user?.role !== "ADMIN") {
+      toast.error("Only admins can manage locations");
+      return;
     }
-    setLocForm({ name: "", airport_code: "", city: "", country: "" });
-    fetchLocations();
+    try {
+      if (editingLocId) {
+        await api.patch(`/locations/${editingLocId}/`, locForm);
+        setEditingLocId(null);
+        toast.success("Location updated");
+      } else {
+        await api.post("/locations/", locForm);
+        toast.success("Location added");
+      }
+      setLocForm({ name: "", airport_code: "", city: "", country: "" });
+      fetchLocations();
+    } catch (err) {
+      console.error("Error saving location:", err);
+      const msg = err.response?.status === 403 ? "Forbidden: admin access required" : "Failed to save location";
+      toast.error(msg);
+    }
   };
 
   const editLocation = (loc) => {
@@ -46,13 +69,38 @@ const AdminDashboard = () => {
   // --- Flight Handlers ---
   const handleFlightSubmit = async (e) => {
     e.preventDefault();
-    if (flightForm.departure_location === flightForm.arrival_location) {
-      return alert("Departure and Arrival cannot be the same");
+    if (auth.user?.role !== "ADMIN") {
+      toast.error("Only admins can add flights");
+      return;
     }
-    await api.post("/flights/", flightForm);
-    alert("Flight Added");
-    setFlightForm({ ...flightForm, flight_number: "" }); // Reset some fields
+    if (flightForm.departure_location === flightForm.arrival_location) {
+      return toast.error("Departure and Arrival cannot be the same");
+    }
+    try {
+      await api.post("/flights/", flightForm);
+      toast.success("Flight Added");
+      setFlightForm({ ...flightForm, flight_number: "" }); // Reset some fields
+    } catch (err) {
+      console.error("Error adding flight:", err);
+      const msg = err.response?.status === 403 ? "Forbidden: admin access required" : "Failed to add flight";
+      toast.error(msg);
+    }
   };
+
+  // Guard: show message if user is not admin
+  if (auth.user && auth.user.role !== "ADMIN") {
+    return (
+      <div className="max-w-2xl mx-auto py-8 text-center">
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
+        <p className="text-gray-600">You need admin access to manage locations and flights.</p>
+        <div className="mt-4">
+          <Link to="/" className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md transition-colors">
+            Back to Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto py-8">

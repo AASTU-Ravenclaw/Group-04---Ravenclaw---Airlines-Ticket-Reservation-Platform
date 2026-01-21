@@ -13,19 +13,32 @@ from .producer import publish_event
 class BookingViewSet(viewsets.ModelViewSet):
     serializer_class = BookingSerializer
     permission_classes = [IsAuthenticated]
+    http_method_names = ['get', 'post', 'delete']  # Exclude PUT and PATCH
 
     def get_queryset(self):
-        return Booking.objects.filter(user_id=self.request.user.id)
+        queryset = Booking.objects.all()
+        
+        # Filter by user role
+        if getattr(self.request.user, 'role', None) != 'ADMIN':
+            queryset = queryset.filter(user_id=self.request.user.id)
+            
+        # Filter by flight_id if provided (useful for Admin view by flight)
+        flight_id = self.request.query_params.get('flight_id')
+        if flight_id:
+            queryset = queryset.filter(flight_id=flight_id)
+            
+        return queryset
 
     def create(self, request, *args, **kwargs):
 
         serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         flight_id = serializer.validated_data['flight_id']
         seats_needed = serializer.validated_data['passengers']
         
-        flight_url = f"{settings.FLIGHT_SERVICE_URL}/{flight_id}/reserve_seat/"
+        flight_url = f"{settings.FLIGHT_SERVICE_URL}/api/v1/flights/{flight_id}/reserve_seat/"
 
         headers = {'X-Service-API-Key': settings.SERVICE_API_KEY}
         for _ in range(seats_needed):
@@ -59,6 +72,22 @@ class BookingViewSet(viewsets.ModelViewSet):
             if booking.status == 'CANCELLED':
                 return Response({"message": "Already cancelled"}, status=status.HTTP_400_BAD_REQUEST)
 
+            # Check if flight has departed
+            flight_url = f"{settings.FLIGHT_SERVICE_URL}/api/v1/flights/{booking.flight_id}/"
+            headers = {'X-Service-API-Key': settings.SERVICE_API_KEY}
+            flight_response = requests.get(flight_url, headers=headers)
+            if flight_response.status_code != 200:
+                return Response({"error": "Unable to verify flight details"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            flight_data = flight_response.json()
+            departure_time_str = flight_data.get('departure_time')
+            if not departure_time_str:
+                return Response({"error": "Flight departure time not available"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            # Parse departure time (assuming ISO format)
+            departure_time = datetime.datetime.fromisoformat(departure_time_str.replace('Z', '+00:00'))
+            if departure_time <= datetime.datetime.now(datetime.timezone.utc):
+                return Response({"error": "Cannot cancel booking after flight departure"}, status=status.HTTP_400_BAD_REQUEST)
 
             seats_to_release = booking.passengers.count() or 1
             
@@ -85,3 +114,10 @@ class BookingViewSet(viewsets.ModelViewSet):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+from rest_framework.decorators import api_view
+
+@api_view(['GET'])
+def health_check(request):
+    return Response({'status': 'healthy'}, status=status.HTTP_200_OK)

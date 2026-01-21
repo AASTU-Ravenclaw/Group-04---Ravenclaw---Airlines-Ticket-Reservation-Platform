@@ -18,7 +18,8 @@ class CustomLoginView(TokenObtainPairView):
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
         if response.status_code == 200:
-            user = User.objects.get(email=request.data.get('email'))
+            email = request.data.get('email', '').lower()
+            user = User.objects.get(email=email)
             user_data = UserProfileSerializer(user).data
             response.data['user'] = user_data
         return response
@@ -79,3 +80,9 @@ def validate_token(request):
         return Response({'error': 'User not found'}, status=status.HTTP_401_UNAUTHORIZED)
     except Exception as e:
         return Response({'error': 'Token validation failed'}, status=status.HTTP_401_UNAUTHORIZED)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def health_check(request):
+    return Response({'status': 'healthy'}, status=status.HTTP_200_OK)
