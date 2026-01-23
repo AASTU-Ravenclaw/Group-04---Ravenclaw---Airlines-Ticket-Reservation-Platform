@@ -6,6 +6,10 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter, SimpleSpanProcessor
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.django import DjangoInstrumentor
+from opentelemetry.propagate import set_global_textmap
+from opentelemetry.propagators.composite import CompositePropagator
+from opentelemetry.propagators.tracecontext import TraceContextTextMapPropagator
+from opentelemetry.propagators.baggage import BaggagePropagator
 try:
     from opentelemetry.instrumentation.djangorestframework import DjangoRestFrameworkInstrumentor
 except ImportError:
@@ -17,7 +21,24 @@ from opentelemetry.semconv.resource import ResourceAttributes
 
 logger = logging.getLogger(__name__)
 
+def _configure_propagators():
+    propagators = [TraceContextTextMapPropagator(), BaggagePropagator()]
+    try:
+        from opentelemetry.propagators.jaeger import JaegerPropagator
+        propagators.append(JaegerPropagator())
+    except Exception:
+        pass
+    try:
+        from opentelemetry.propagators.b3 import B3MultiFormat
+        propagators.append(B3MultiFormat())
+    except Exception:
+        pass
+    set_global_textmap(CompositePropagator(propagators))
+
+
 def setup_opentelemetry():
+    return # Manual instrumentation disabled for auto-instrumentation
+    _configure_propagators()
     service_name = os.environ.get("OTEL_SERVICE_NAME", "unknown-service")
     print(f"Setting up OpenTelemetry for service: {service_name}")
     
@@ -62,4 +83,4 @@ def setup_opentelemetry():
     except Exception as e:
         print(f"Skipping Psycopg2 instrumentation due to error: {e}")
 
-setup_opentelemetry()
+# setup_opentelemetry()

@@ -25,4 +25,4 @@ COPY . /app/
 RUN python manage.py collectstatic --noinput
 
 # The command is handled by docker-compose, but this is a good default
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000"]
+CMD ["opentelemetry-instrument", "gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000"]

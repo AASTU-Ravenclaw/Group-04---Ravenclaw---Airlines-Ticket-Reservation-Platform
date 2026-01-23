@@ -1,5 +1,6 @@
 # Booking Service — Running Tests in Kubernetes
 
+This guide shows how to run the Django test suite for the booking-service inside Kubernetes pods. Tests are included in the image after rebuilds; no `kubectl cp` needed.
 
 ## Prerequisites
 - `kubectl` access to the cluster
@@ -25,7 +26,7 @@ kubectl exec -n airlines $POD -- python manage.py test -v 2
 kubectl exec -n airlines $POD -- sh -lc 'DATABASE_URL=sqlite:///test.sqlite3 python manage.py test -v 2'
 ```
 
-## Local Development
+## Local Development (Optional)
 ```bash
 cd "/home/kaleb/Desktop/project copy (7)/booking_service"
 python3 -m venv .venv
@@ -34,3 +35,9 @@ pip install --upgrade pip
 pip install -r requirements.txt
 DATABASE_URL=sqlite:///test.sqlite3 python manage.py test -v 2
 ```
+
+## Notes & Troubleshooting
+- Tests expect `bookings` app migrations to run; Django handles this automatically in the pod.
+- Health check test hits `/health/` and accepts DRF `Response` or `JsonResponse`.
+- Kafka logs during tests are expected; event publishes are mocked in tests that need it.
+- If you see "NO TESTS RAN", ensure the image was rebuilt with the latest test file and that the pod has the updated image.

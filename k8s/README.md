@@ -27,7 +27,7 @@ This directory contains Kubernetes manifests equivalent to the docker-compose se
    kubectl apply -f configmap.yaml
    kubectl apply -f pvcs.yaml
    kubectl apply -f traefik.yaml
-   kubectl apply -f rabbitmq.yaml
+   kubectl apply -f kafka.yaml
    kubectl apply -f postgres-user.yaml
    kubectl apply -f postgres-flight.yaml
    kubectl apply -f postgres-booking.yaml

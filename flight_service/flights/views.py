@@ -8,12 +8,18 @@ import datetime
 
 from .models import Location, Flight
 from .serializers import LocationSerializer, FlightReadSerializer, FlightCreateSerializer, FlightUpdateSerializer
-from .permissions import IsAdminOrReadOnly, IsServiceAuthenticated
+from .permissions import IsAdminOrReadOnly, IsAdmin, IsServiceAuthenticated
 
-class LocationViewSet(viewsets.ModelViewSet):
+class PublicLocationViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Location.objects.all()
     serializer_class = LocationSerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [AllowAny]
+    pagination_class = None
+
+class AdminLocationViewSet(viewsets.ModelViewSet):
+    queryset = Location.objects.all()
+    serializer_class = LocationSerializer
+    permission_classes = [IsAdmin]
     pagination_class = None
 
     def destroy(self, request, *args, **kwargs):
@@ -33,9 +39,39 @@ class LocationViewSet(viewsets.ModelViewSet):
         
         return super().destroy(request, *args, **kwargs)
 
-class FlightViewSet(viewsets.ModelViewSet):
+class PublicFlightViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Flight.objects.all().order_by('departure_time')
-    permission_classes = [IsAdminOrReadOnly] 
+    permission_classes = [AllowAny]
+    pagination_class = None
+
+    def get_serializer_class(self):
+        return FlightReadSerializer
+
+    def list(self, request, *args, **kwargs):
+
+        queryset = Flight.objects.all().order_by('departure_time')
+        
+        origin = request.query_params.get('origin')
+        destination = request.query_params.get('destination')
+        date = request.query_params.get('date')
+
+        if origin:
+            queryset = queryset.filter(departure_location__airport_code__iexact=origin) | \
+                       queryset.filter(departure_location__city__icontains=origin)
+        
+        if destination:
+            queryset = queryset.filter(arrival_location__airport_code__iexact=destination) | \
+                       queryset.filter(arrival_location__city__icontains=destination)
+            
+        if date:
+            queryset = queryset.filter(departure_time__date=date)
+
+        serializer = FlightReadSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+class AdminFlightViewSet(viewsets.ModelViewSet):
+    queryset = Flight.objects.all().order_by('departure_time')
+    permission_classes = [IsAdmin] 
     
     pagination_class = None 
     

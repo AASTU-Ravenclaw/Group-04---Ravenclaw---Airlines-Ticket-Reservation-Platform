@@ -45,11 +45,11 @@ const AdminDashboard = () => {
     }
     try {
       if (editingLocId) {
-        await api.patch(`/locations/${editingLocId}/`, locForm);
+        await api.patch(`/admin/locations/${editingLocId}/`, locForm);
         setEditingLocId(null);
         toast.success("Location updated");
       } else {
-        await api.post("/locations/", locForm);
+        await api.post("/admin/locations/", locForm);
         toast.success("Location added");
       }
       setLocForm({ name: "", airport_code: "", city: "", country: "" });
@@ -77,7 +77,7 @@ const AdminDashboard = () => {
       return toast.error("Departure and Arrival cannot be the same");
     }
     try {
-      await api.post("/flights/", flightForm);
+      await api.post("/admin/flights/", flightForm);
       toast.success("Flight Added");
       setFlightForm({ ...flightForm, flight_number: "" }); // Reset some fields
     } catch (err) {

@@ -49,7 +49,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: rabbitmq-data
+  name: kafka-data
   namespace: airlines
 spec:
   accessModes:

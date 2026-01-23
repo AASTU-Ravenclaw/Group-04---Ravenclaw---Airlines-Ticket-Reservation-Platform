@@ -4,62 +4,8 @@ metadata:
   name: rabbitmq
   namespace: airlines
 spec:
-  serviceName: "rabbitmq"
-  replicas: 1
-  selector:
-    matchLabels:
-      app: rabbitmq
-  template:
-    metadata:
-      labels:
-        app: rabbitmq
-    spec:
-      containers:
-      - name: rabbitmq
-        image: rabbitmq:3-management
-        ports:
-        - containerPort: 5672
-        - containerPort: 15672
-        resources:
-          requests:
-            cpu: "50m"
-            memory: "128Mi"
-          limits:
-            cpu: "200m"
-            memory: "512Mi"
-        volumeMounts:
-        - name: data
-          mountPath: /var/lib/rabbitmq
-        env:
-        - name: RABBITMQ_DEFAULT_USER
-          valueFrom:
-            secretKeyRef:
-              name: db-secrets
-              key: RABBITMQ_DEFAULT_USER
-        - name: RABBITMQ_DEFAULT_PASS
-          valueFrom:
-            secretKeyRef:
-              name: db-secrets
-              key: RABBITMQ_DEFAULT_PASS
-  volumeClaimTemplates:
-  - metadata:
-      name: data
-    spec:
-      accessModes: [ "ReadWriteOnce" ]
-      resources:
-        requests:
-          storage: 2Gi
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: rabbitmq
-  namespace: airlines
-spec:
-  clusterIP: None
-  selector:
-    app: rabbitmq
-  ports:
+  # Deprecated: RabbitMQ has been replaced by Kafka.
+  # Apply k8s/kafka.yaml instead.
   - name: amqp
     port: 5672
     targetPort: 5672

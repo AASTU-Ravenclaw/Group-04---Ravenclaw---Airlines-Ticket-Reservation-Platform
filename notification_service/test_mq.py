@@ -1,14 +1,14 @@
-import pika
 import os
-import sys
+from kafka import KafkaAdminClient
 
-rabbitmq_url = os.environ.get('RABBITMQ_URL_TEST', 'amqp://guest:guest@rabbitmq.airlines.svc.cluster.local:5672/')
-print(f"Connecting to {rabbitmq_url}...")
+brokers = os.environ.get('KAFKA_BROKERS', 'kafka.airlines.svc.cluster.local:9092')
+bootstrap_servers = [b.strip() for b in brokers.split(',') if b.strip()]
+print(f"Connecting to Kafka at {bootstrap_servers}...")
 
 try:
-    params = pika.URLParameters(rabbitmq_url)
-    connection = pika.BlockingConnection(params)
-    print("Successfully connected!")
-    connection.close()
+    admin = KafkaAdminClient(bootstrap_servers=bootstrap_servers, client_id="notification-service-test")
+    topics = admin.list_topics()
+    print(f"Successfully connected! Topics: {sorted(topics)}")
+    admin.close()
 except Exception as e:
     print(f"Connection failed: {e}")

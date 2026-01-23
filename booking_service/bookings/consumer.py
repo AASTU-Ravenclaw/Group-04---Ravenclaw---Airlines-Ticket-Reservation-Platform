@@ -1,17 +1,17 @@
 import json
-import pika
 import threading
 import time
-import os
 from django.conf import settings
 from .producer import publish_event
 from .models import Booking
-from pika.exceptions import AMQPConnectionError
+from opentelemetry import trace
+from opentelemetry.propagate import extract
+from confluent_kafka import Consumer, KafkaError
 
 
 def start_flight_event_consumer():
     """
-    Starts a RabbitMQ consumer for flight events in a separate thread.
+    Starts a Kafka consumer for flight events in a separate thread.
     Listens for flight events and enriches them with user IDs from active bookings.
     """
     print("Starting flight event consumer (Resilient)")
@@ -20,77 +20,18 @@ def start_flight_event_consumer():
 
     for attempt in range(max_retries):
         try:
-            params = pika.URLParameters(settings.RABBITMQ_URL)
-            params.heartbeat = 600
-            connection = pika.BlockingConnection(params)
-            channel = connection.channel()
+            consumer = Consumer({
+                "bootstrap.servers": ",".join(settings.KAFKA_BROKERS),
+                "group.id": "booking_service_enrichment",
+                "enable.auto.commit": False,
+                "auto.offset.reset": "earliest",
+            })
 
-            # Durable Exchange
-            channel.exchange_declare(exchange="flight_events", exchange_type="fanout", durable=True)
+            consumer.subscribe(["flight_events"])
 
-            # Durable, Named Queue (Shared by replicas, survives restarts)
-            queue_name = "booking_service_enrichment"
-            channel.queue_declare(queue=queue_name, durable=True)
-            
-            # Bind
-            channel.queue_bind(exchange="flight_events", queue=queue_name)
+            print("Booking Service Flight Consumer connected. Waiting for messages in flight_events")
 
-            # QoS: Process 1 message at a time, preventing overload
-            channel.basic_qos(prefetch_count=1)
-
-            print(f"Booking Service Flight Consumer connected. Waiting for messages in {queue_name}")
-
-            def callback(ch, method, properties, body):
-                try:
-                    data = json.loads(body)
-                    event_type = data.get("event_type")
-                    idempotency_key = data.get("idempotency_key")
-                    payload = data.get("data")
-
-                    print(f"Booking Consumer received: {event_type} - {payload}")
-
-                    flight_id = payload.get("flight_id")
-
-                    # Find all active (non-cancelled) bookings for this flight
-                    active_bookings = Booking.objects.filter(
-                        flight_id=flight_id,
-                        status='CONFIRMED'
-                    )
-
-                    # Extract user IDs and booking IDs from active bookings
-                    booking_data = list(active_bookings.values('user_id', 'booking_id'))
-
-                    print(f"Found {len(booking_data)} active bookings for flight {flight_id}")
-
-                    if booking_data:
-                        # Create enriched event data
-                        enriched_payload = payload.copy()
-                        enriched_payload['userBookings'] = [
-                            {'user_id': str(item['user_id']), 'booking_id': str(item['booking_id'])}
-                            for item in booking_data
-                        ]
-
-                        print(f"Enriched payload: {enriched_payload}")
-
-                        # Publish enriched event to notification service
-                        publish_event(event_type, enriched_payload)
-
-                        print(f" [x] Enriched flight event {event_type} for {len(booking_data)} users")
-                    else:
-                        print(f" [x] No active bookings found for flight {flight_id}")
-                    
-                    # Manual Ack: Confirm processing success
-                    ch.basic_ack(delivery_tag=method.delivery_tag)
-
-                except Exception as e:
-                    print(f" [!] Error processing flight event: {e}")
-                    # Requeue=False -> Dead Letter or Drop (prevent infinite loop)
-                    ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-
-            channel.basic_consume(
-                queue=queue_name, on_message_callback=callback
-                # auto_ack=False is default
-            )
+            tracer = trace.get_tracer(__name__)
 
             # Start a background thread to periodically update liveness file
             stop_event = threading.Event()
@@ -107,19 +48,81 @@ def start_flight_event_consumer():
             t = threading.Thread(target=health_loop, daemon=True)
             t.start()
 
-            # Begin consuming messages (blocking until error/stop)
-            channel.start_consuming()
+            try:
+                while True:
+                    message = consumer.poll(1.0)
+                    if message is None:
+                        continue
+                    if message.error():
+                        print(f" [!] Kafka error: {message.error()}")
+                        continue
 
-            # Stop health loop if we exit consuming
-            stop_event.set()
+                    try:
+                        data = json.loads(message.value().decode("utf-8"))
+                        event_type = data.get("event_type")
+                        idempotency_key = data.get("idempotency_key")
+                        payload = data.get("data")
+
+                        print(f"Booking Consumer received: {event_type} - {payload}")
+
+                        headers = {k: (v.decode("utf-8") if v else "") for k, v in (message.headers() or [])}
+                        context = extract(headers)
+
+                        with tracer.start_as_current_span("kafka.consume", context=context, attributes={
+                            "messaging.system": "kafka",
+                            "messaging.destination": "flight_events",
+                            "messaging.destination_kind": "topic",
+                            "messaging.kafka.message_key": event_type,
+                            "messaging.message_id": idempotency_key,
+                        }):
+                            flight_id = payload.get("flight_id")
+
+                            # Find all active (non-cancelled) bookings for this flight
+                            active_bookings = Booking.objects.filter(
+                                flight_id=flight_id,
+                                status='CONFIRMED'
+                            )
+
+                            # Extract user IDs and booking IDs from active bookings
+                            booking_data = list(active_bookings.values('user_id', 'booking_id'))
+
+                            print(f"Found {len(booking_data)} active bookings for flight {flight_id}")
+
+                            if booking_data:
+                                # Create enriched event data
+                                enriched_payload = payload.copy()
+                                enriched_payload['userBookings'] = [
+                                    {'user_id': str(item['user_id']), 'booking_id': str(item['booking_id'])}
+                                    for item in booking_data
+                                ]
+
+                                print(f"Enriched payload: {enriched_payload}")
+
+                                # Publish enriched event to notification service
+                                publish_event(event_type, enriched_payload)
+
+                                print(f" [x] Enriched flight event {event_type} for {len(booking_data)} users")
+                            else:
+                                print(f" [x] No active bookings found for flight {flight_id}")
+
+                        consumer.commit(message=message)
+
+                    except Exception as e:
+                        print(f" [!] Error processing flight event: {e}")
+                        # Commit offset to drop the problematic message
+                        consumer.commit(message=message)
+
+            finally:
+                stop_event.set()
+                consumer.close()
             return
 
-        except AMQPConnectionError as e:
+        except KafkaError as e:
             if attempt < max_retries - 1:
-                print(f"Could not connect to RabbitMQ: {e}. Retrying in {retry_delay} seconds...")
+                print(f"Could not connect to Kafka: {e}. Retrying in {retry_delay} seconds...")
                 time.sleep(retry_delay)
             else:
-                print(f"Could not connect to RabbitMQ: {e}. Maximum retries ({max_retries}) reached. Consumer failed to start.")
+                print(f"Could not connect to Kafka: {e}. Maximum retries ({max_retries}) reached. Consumer failed to start.")
                 break
         except Exception as e:
             print(f"An unexpected error occurred: {e}")

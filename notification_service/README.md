@@ -1,5 +1,7 @@
 # Notification Service — Running Tests in Kubernetes
 
+This guide shows how to run the Django test suite for the notification-service in Kubernetes. Tests are part of the image after rebuilds; no `kubectl cp` is required.
+
 ## Prerequisites
 - `kubectl` configured for the cluster
 - Namespace: `airlines`
@@ -15,6 +17,12 @@ kubectl get pods -n airlines -l app=notification-service -o name
 ```bash
 POD=notification-service-6555f59f-566hb
 kubectl exec -n airlines $POD -- python manage.py test -v 2
+```
+3) (Optional) Verify on another replica:
+```bash
+POD=notification-service-6555f59f-6h5qp
+kubectl exec -n airlines $POD -- python manage.py test -v 2
+```
 
 ## Local Development (Optional)
 ```bash
@@ -25,3 +33,9 @@ pip install --upgrade pip
 pip install -r requirements.txt
 python manage.py test -v 2
 ```
+
+## Notes & Troubleshooting
+- Tests mock Mongo queries; no live Mongo or Kafka needed for logic coverage. Kafka startup logs are expected when the app initializes.
+- Auth for APIs requires `X-User-Id`; cross-user access should return 403.
+- Health check lives at `/health/`.
+- If you see "NO TESTS RAN", ensure the image was rebuilt so the updated tests are present.

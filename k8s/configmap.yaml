@@ -10,6 +10,8 @@ data:
         auth-middleware:
           forwardAuth:
             address: "http://user-service.airlines.svc.cluster.local:8000/api/v1/auth/validate"
+            authRequestHeaders:
+              - "Authorization"
             authResponseHeaders:
               - "X-User-Id"
               - "X-User-Email"

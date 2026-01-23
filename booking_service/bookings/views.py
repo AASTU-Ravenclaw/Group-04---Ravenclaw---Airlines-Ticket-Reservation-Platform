@@ -4,10 +4,14 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 import datetime
+from opentelemetry.propagate import inject
+import logging
 
 from .models import Booking
 from .serializers import BookingSerializer
 from .producer import publish_event
+
+logger = logging.getLogger(__name__)
 
 
 class BookingViewSet(viewsets.ModelViewSet):
@@ -16,6 +20,12 @@ class BookingViewSet(viewsets.ModelViewSet):
     http_method_names = ['get', 'post', 'delete']  # Exclude PUT and PATCH
 
     def get_queryset(self):
+        logger.info(
+            "Incoming trace headers: traceparent=%s tracestate=%s baggage=%s",
+            self.request.headers.get("traceparent"),
+            self.request.headers.get("tracestate"),
+            self.request.headers.get("baggage"),
+        )
         queryset = Booking.objects.all()
         
         # Filter by user role
@@ -38,15 +48,20 @@ class BookingViewSet(viewsets.ModelViewSet):
         flight_id = serializer.validated_data['flight_id']
         seats_needed = serializer.validated_data['passengers']
         
-        flight_url = f"{settings.FLIGHT_SERVICE_URL}/api/v1/flights/{flight_id}/reserve_seat/"
+        flight_url = f"{settings.FLIGHT_ADMIN_SERVICE_URL}/{flight_id}/reserve_seat/"
 
         headers = {'X-Service-API-Key': settings.SERVICE_API_KEY}
+        inject(headers)
         for _ in range(seats_needed):
             response = requests.post(flight_url, headers=headers)
             if response.status_code != 200:
                 return Response(
-                    {"error": f"Failed to reserve seat. Status: {response.status_code}, Response: {response.text}"}, 
-                    status=status.HTTP_409_CONFLICT
+                    {
+                        "error": "Failed to reserve seat",
+                        "upstream_status": response.status_code,
+                        "upstream_response": response.text,
+                    },
+                    status=response.status_code
                 )
 
         serializer.validated_data['user_id'] = request.user.id
@@ -73,8 +88,9 @@ class BookingViewSet(viewsets.ModelViewSet):
                 return Response({"message": "Already cancelled"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Check if flight has departed
-            flight_url = f"{settings.FLIGHT_SERVICE_URL}/api/v1/flights/{booking.flight_id}/"
+            flight_url = f"{settings.FLIGHT_SERVICE_URL}/{booking.flight_id}/"
             headers = {'X-Service-API-Key': settings.SERVICE_API_KEY}
+            inject(headers)
             flight_response = requests.get(flight_url, headers=headers)
             if flight_response.status_code != 200:
                 return Response({"error": "Unable to verify flight details"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -91,9 +107,10 @@ class BookingViewSet(viewsets.ModelViewSet):
 
             seats_to_release = booking.passengers.count() or 1
             
-            flight_url = f"{settings.FLIGHT_SERVICE_URL}/{booking.flight_id}/release_seat/"
+            flight_url = f"{settings.FLIGHT_ADMIN_SERVICE_URL}/{booking.flight_id}/release_seat/"
             
             headers = {'X-Service-API-Key': settings.SERVICE_API_KEY}
+            inject(headers)
             for _ in range(seats_to_release):
                 requests.post(flight_url, headers=headers)
 
@@ -120,4 +137,10 @@ from rest_framework.decorators import api_view
 
 @api_view(['GET'])
 def health_check(request):
+    logger.info(
+        "Incoming trace headers: traceparent=%s tracestate=%s baggage=%s",
+        request.headers.get("traceparent"),
+        request.headers.get("tracestate"),
+        request.headers.get("baggage"),
+    )
     return Response({'status': 'healthy'}, status=status.HTTP_200_OK)

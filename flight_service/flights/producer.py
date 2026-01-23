@@ -1,16 +1,19 @@
-import pika
 import json
 import uuid
 import threading
 import queue
 import time
 from django.conf import settings
+from opentelemetry import trace
+from opentelemetry.propagate import inject
+from confluent_kafka import Producer, KafkaError
 
-class AsyncAMQPProducer:
+class AsyncKafkaProducer:
     def __init__(self):
         self._queue = queue.Queue()
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
         self._thread.start()
+        self._tracer = trace.get_tracer(__name__)
 
     def publish(self, event_type, body, exchange='flight_events'):
         """
@@ -19,22 +22,24 @@ class AsyncAMQPProducer:
         self._queue.put((event_type, body, exchange))
 
     def _run_loop(self):
-        connection = None
-        channel = None
+        producer = None
+        bootstrap_servers = ",".join(settings.KAFKA_BROKERS)
         
-        print("--> Starting AsyncAMQPProducer background thread (Flight Service)")
+        print("--> Starting AsyncKafkaProducer background thread (Flight Service)")
 
         while True:
             try:
                 # 1. Establish/Re-establish connection
-                if connection is None or connection.is_closed:
+                if producer is None:
                     try:
-                        params = pika.URLParameters(settings.RABBITMQ_URL)
-                        params.heartbeat = 600
-                        params.blocked_connection_timeout = 300
-                        connection = pika.BlockingConnection(params)
-                        channel = connection.channel()
-                        print("--> AsyncAMQPProducer connected to RabbitMQ")
+                        producer = Producer({
+                            "bootstrap.servers": bootstrap_servers,
+                            "acks": "all",
+                            "linger.ms": 50,
+                            "enable.idempotence": True,
+                            "message.send.max.retries": 5,
+                        })
+                        print("--> AsyncKafkaProducer connected to Kafka")
                     except Exception as e:
                         print(f"--> Connection failed: {e}. Retrying in 5s...")
                         time.sleep(5)
@@ -45,42 +50,51 @@ class AsyncAMQPProducer:
                     # Wait up to 1s for a message to allow heartbeat processing
                     item = self._queue.get(timeout=1.0)
                 except queue.Empty:
-                    # Process heartbeats to keep connection alive during idle times
-                    if connection and not connection.is_closed:
-                        connection.process_data_events()
                     continue
 
                 event_type, body, exchange = item
 
                 # 3. Publish
                 try:
-                    # Ensure exchange exists (idempotent, using durable=True)
-                    channel.exchange_declare(exchange=exchange, exchange_type='fanout', durable=True)
-                    
                     idempotency_key = str(uuid.uuid4())
                     message = {
                         'event_type': event_type,
                         'idempotency_key': idempotency_key,
                         'data': body
                     }
-                    
-                    channel.basic_publish(
-                        exchange=exchange,
-                        routing_key=event_type,
-                        body=json.dumps(message),
-                        properties=pika.BasicProperties(
-                            delivery_mode=2,  # Persistent
-                            content_type='application/json'
+
+                    headers = {}
+                    inject(headers)
+                    kafka_headers = [(k, str(v).encode("utf-8")) for k, v in headers.items()]
+
+                    with self._tracer.start_as_current_span("kafka.publish", attributes={
+                        "messaging.system": "kafka",
+                        "messaging.destination": exchange,
+                        "messaging.destination_kind": "topic",
+                        "messaging.kafka.message_key": event_type,
+                        "messaging.message_id": idempotency_key,
+                    }):
+                        producer.produce(
+                            exchange,
+                            value=json.dumps(message).encode("utf-8"),
+                            key=event_type.encode("utf-8"),
+                            headers=kafka_headers,
                         )
-                    )
+                        producer.poll(0)
+                        producer.flush(10)
                     
                     print(f"--> [Async] Flight Event Published: {event_type} (key: {idempotency_key})")
                     
-                except (pika.exceptions.AMQPConnectionError, pika.exceptions.StreamLostError) as e:
+                except KafkaError as e:
                     print(f"--> [Error] Lost connection during publish: {e}")
                     # Re-queue the message to be tried again after reconnect
                     self._queue.put(item)
-                    connection = None # Force reconnect
+                    if producer:
+                        try:
+                            producer.flush(5)
+                        except Exception:
+                            pass
+                    producer = None
                     time.sleep(1)
                 except Exception as e:
                     print(f"--> [Error] Failed to publish {event_type}: {e}")
@@ -90,11 +104,16 @@ class AsyncAMQPProducer:
                     
             except Exception as e:
                 print(f"--> [Critical] Producer Loop Error: {e}")
-                connection = None
+                if producer:
+                    try:
+                        producer.flush(5)
+                    except Exception:
+                        pass
+                producer = None
                 time.sleep(5)
 
 # Singleton instance
-_producer = AsyncAMQPProducer()
+_producer = AsyncKafkaProducer()
 
 def publish_event(event_type, body):
     # Flight service implementation defaults to 'flight_events' and doesn't expose exchange param in logs

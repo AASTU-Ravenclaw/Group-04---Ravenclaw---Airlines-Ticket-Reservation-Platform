@@ -55,7 +55,7 @@ const FlightEdit = () => {
 
     setSaving(true);
     try {
-      await api.patch(`/flights/${flightId}/`, { status, departure_time, arrival_time });
+      await api.patch(`/admin/flights/${flightId}/`, { status, departure_time, arrival_time });
       toast.success("Flight updated successfully");
       navigate("/admin/flights");
     } catch (err) {

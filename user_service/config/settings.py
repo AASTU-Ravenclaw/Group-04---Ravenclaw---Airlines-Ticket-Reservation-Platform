@@ -4,12 +4,6 @@ from datetime import timedelta
 import dj_database_url
 import logging
 
-# Import OpenTelemetry configuration
-try:
-    import config.otel  # noqa
-except ImportError:
-    pass  # OpenTelemetry not available
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dev-key')
@@ -213,22 +207,7 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': False,
         },
-        'opentelemetry': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
     },
-}
-
-# OpenTelemetry Configuration
-OPENTELEMETRY = {
-    'SERVICE_NAME': 'user-service',
-    'SERVICE_VERSION': '1.0.0',
-    'OTLP_ENDPOINT': os.environ.get('OTLP_ENDPOINT', 'http://otel-collector.observability.svc.cluster.local:4318'),
-    'TRACES_EXPORTER': 'otlp',
-    'METRICS_EXPORTER': 'otlp',
-    'LOGS_EXPORTER': 'otlp',
 }
 
 # Create logs directory

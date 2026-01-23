@@ -1,5 +1,7 @@
 # Flight Service — Running Tests in Kubernetes
 
+This guide explains how to run the Django test suite for the flight-service inside a Kubernetes pod without modifying application code.
+
 ## Prerequisites
 - `kubectl` configured to reach the cluster
 - Namespace: `airlines`
@@ -22,7 +24,13 @@ kubectl exec -n airlines $POD -- python manage.py test -v 2
 kubectl exec -n airlines $POD -- sh -lc 'DATABASE_URL=sqlite:///test.sqlite3 python manage.py test -v 2'
 ```
 
-## Local Development
+3) (Optional) Verify on the second replica:
+```bash
+POD=flight-service-779f5f587c-zzrzn
+kubectl exec -n airlines $POD -- python manage.py test -v 2
+```
+
+## Local Development (Optional)
 ```bash
 cd "/home/kaleb/Desktop/project copy (7)/flight_service"
 python3 -m venv .venv

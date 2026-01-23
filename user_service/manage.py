@@ -7,14 +7,6 @@ import sys
 def main():
     """Run administrative tasks."""
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
-    
-    try:
-        from config.otel import setup_opentelemetry
-        setup_opentelemetry()
-    except ImportError:
-         pass
-    except Exception as e:
-        print(f"Failed to setup OTEL in manage.py: {e}")
 
     try:
         from django.core.management import execute_from_command_line

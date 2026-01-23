@@ -2,12 +2,6 @@ import os
 from pathlib import Path
 import logging
 
-# Import OpenTelemetry configuration
-try:
-    import config.otel  # noqa
-except ImportError:
-    pass  # OpenTelemetry not available
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dev-key')
@@ -125,10 +119,11 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 # Service-to-Service API Key
 SERVICE_API_KEY = os.environ.get('SERVICE_API_KEY', 'dev-service-key-12345')
 
-# RabbitMQ Settings
-RABBITMQ_USER = os.environ.get('RABBITMQ_DEFAULT_USER', 'guest')
-RABBITMQ_PASS = os.environ.get('RABBITMQ_DEFAULT_PASS', 'guest')
-RABBITMQ_URL = f'amqp://{RABBITMQ_USER}:{RABBITMQ_PASS}@rabbitmq.airlines.svc.cluster.local:5672/'
+# Kafka Settings
+KAFKA_BROKERS = os.environ.get(
+    'KAFKA_BROKERS',
+    'kafka.airlines.svc.cluster.local:9092'
+).split(',')
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
 ]
@@ -154,6 +149,9 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
+    'x-user-id',
+    'x-user-email',
+    'x-user-role',
 ]
 
 # Logging Configuration
@@ -200,22 +198,7 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': False,
         },
-        'opentelemetry': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
     },
-}
-
-# OpenTelemetry Configuration
-OPENTELEMETRY = {
-    'SERVICE_NAME': 'flight-service',
-    'SERVICE_VERSION': '1.0.0',
-    'OTLP_ENDPOINT': os.environ.get('OTLP_ENDPOINT', 'http://otel-collector.observability.svc.cluster.local:4318'),
-    'TRACES_EXPORTER': 'otlp',
-    'METRICS_EXPORTER': 'otlp',
-    'LOGS_EXPORTER': 'otlp',
 }
 
 # Create logs directory

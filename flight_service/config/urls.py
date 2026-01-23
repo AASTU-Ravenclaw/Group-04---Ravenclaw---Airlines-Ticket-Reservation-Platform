@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.conf.urls.static import static
 from django.conf import settings
 from rest_framework.routers import DefaultRouter
-from flights.views import LocationViewSet, FlightViewSet
+from flights.views import PublicLocationViewSet, PublicFlightViewSet, AdminLocationViewSet, AdminFlightViewSet
 
 def health_check(request):
     return JsonResponse({'status': 'healthy'})
@@ -29,17 +29,23 @@ schema_view = get_schema_view(
 )
 
 # Initialize the router for viewsets
-router = DefaultRouter()
-# Register your viewsets
-router.register(r'locations', LocationViewSet)
-router.register(r'flights', FlightViewSet)
+public_router = DefaultRouter()
+public_router.register(r'locations', PublicLocationViewSet)
+public_router.register(r'flights', PublicFlightViewSet)
+
+admin_router = DefaultRouter()
+admin_router.register(r'locations', AdminLocationViewSet)
+admin_router.register(r'flights', AdminFlightViewSet)
 
 urlpatterns = [
     # 1. Django Admin
     path('admin/', admin.site.urls),
     
-    # 2. API Routes (using the router)
-    path('api/v1/', include(router.urls)),
+    # 2. API Routes (public read-only)
+    path('api/v1/', include(public_router.urls)),
+
+    # 3. Admin API Routes (admin-only)
+    path('api/v1/admin/', include(admin_router.urls)),
     
     # Health Check
     path('health/', health_check, name='health_check'),

@@ -1,0 +1,109 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pgadmin-servers
+  namespace: airlines
+data:
+  servers.json: |
+    {
+      "Servers": {
+        "1": {
+          "Name": "User DB",
+          "Group": "Airlines",
+          "Host": "postgres-user",
+          "Port": 5432,
+          "MaintenanceDB": "airlines_user",
+          "Username": "postgres",
+          "Password": "password",
+          "SavePassword": true,
+          "SSLMode": "prefer"
+        },
+        "2": {
+          "Name": "Flight DB",
+          "Group": "Airlines",
+          "Host": "postgres-flight",
+          "Port": 5432,
+          "MaintenanceDB": "airlines_flight",
+          "Username": "postgres",
+          "Password": "password",
+          "SavePassword": true,
+          "SSLMode": "prefer"
+        },
+        "3": {
+          "Name": "Booking DB",
+          "Group": "Airlines",
+          "Host": "postgres-booking",
+          "Port": 5432,
+          "MaintenanceDB": "airlines_booking",
+          "Username": "postgres",
+          "Password": "password",
+          "SavePassword": true,
+          "SSLMode": "prefer"
+        }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgadmin
+  namespace: airlines
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pgadmin
+  template:
+    metadata:
+      labels:
+        app: pgadmin
+    spec:
+      containers:
+      - name: pgadmin
+        image: dpage/pgadmin4:8.13
+        ports:
+        - containerPort: 80
+        env:
+        - name: PGADMIN_DEFAULT_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: PGADMIN_DEFAULT_EMAIL
+        - name: PGADMIN_DEFAULT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: PGADMIN_DEFAULT_PASSWORD
+        - name: PGADMIN_CONFIG_SERVER_MODE
+          value: "True"
+        - name: PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED
+          value: "False"
+        volumeMounts:
+        - name: pgadmin-servers
+          mountPath: /pgadmin4/servers.json
+          subPath: servers.json
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "25m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+      volumes:
+      - name: pgadmin-servers
+        configMap:
+          name: pgadmin-servers
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgadmin
+  namespace: airlines
+spec:
+  selector:
+    app: pgadmin
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+  type: ClusterIP

@@ -3,12 +3,6 @@ from pathlib import Path
 import mongoengine
 import logging
 
-# Import OpenTelemetry configuration
-try:
-    import config.otel  # noqa
-except ImportError:
-    pass  # OpenTelemetry not available
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dev-key')
@@ -124,10 +118,11 @@ CHANNEL_LAYERS = {
 MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://localhost:27017/notification_db')
 # mongoengine.connect(host=MONGO_URI)  # Commented out to avoid double connection
 
-# RabbitMQ URL
-RABBITMQ_USER = os.environ.get('RABBITMQ_DEFAULT_USER', 'guest')
-RABBITMQ_PASS = os.environ.get('RABBITMQ_DEFAULT_PASS', 'guest')
-RABBITMQ_URL = f'amqp://{RABBITMQ_USER}:{RABBITMQ_PASS}@rabbitmq.airlines.svc.cluster.local:5672/'
+# Kafka Settings
+KAFKA_BROKERS = os.environ.get(
+    'KAFKA_BROKERS',
+    'kafka.airlines.svc.cluster.local:9092'
+).split(',')
 
 # CORS settings for frontend access
 CORS_ALLOWED_ORIGINS = [
@@ -231,22 +226,7 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': False,
         },
-        'opentelemetry': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
     },
-}
-
-# OpenTelemetry Configuration
-OPENTELEMETRY = {
-    'SERVICE_NAME': 'notification-service',
-    'SERVICE_VERSION': '1.0.0',
-    'OTLP_ENDPOINT': os.environ.get('OTLP_ENDPOINT', 'http://otel-collector.observability.svc.cluster.local:4318'),
-    'TRACES_EXPORTER': 'otlp',
-    'METRICS_EXPORTER': 'otlp',
-    'LOGS_EXPORTER': 'otlp',
 }
 
 # Create logs directory

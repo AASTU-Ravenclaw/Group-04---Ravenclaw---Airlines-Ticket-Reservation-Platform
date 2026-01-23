@@ -24,7 +24,7 @@ spec:
       - name: booking-service
         image: booking-service:latest
         imagePullPolicy: IfNotPresent
-        command: ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000"]
+        command: ["opentelemetry-instrument", "gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000"]
         ports:
         - containerPort: 8000
         resources:
@@ -48,8 +48,20 @@ spec:
           periodSeconds: 5
 
         env:
+        - name: DJANGO_SETTINGS_MODULE
+          value: config.settings
         - name: OTEL_SERVICE_NAME
           value: booking-service
+        - name: OTEL_LOGS_EXPORTER
+          value: otlp
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://otel-collector.observability.svc.cluster.local:4317
+        - name: OTEL_EXPORTER_OTLP_PROTOCOL
+          value: grpc
+        - name: OTEL_TRACES_EXPORTER
+          value: otlp
+        - name: OTEL_PROPAGATORS
+          value: tracecontext,baggage
         - name: FLIGHT_SERVICE_URL
           valueFrom:
             secretKeyRef:
@@ -80,18 +92,8 @@ spec:
             secretKeyRef:
               name: db-secrets
               key: POSTGRES_DB_BOOKING
-        - name: RABBITMQ_URL
-          value: amqp://guest:guest@rabbitmq.airlines.svc.cluster.local:5672/
-        - name: RABBITMQ_DEFAULT_USER
-          valueFrom:
-            secretKeyRef:
-              name: db-secrets
-              key: RABBITMQ_DEFAULT_USER
-        - name: RABBITMQ_DEFAULT_PASS
-          valueFrom:
-            secretKeyRef:
-              name: db-secrets
-              key: RABBITMQ_DEFAULT_PASS
+        - name: KAFKA_BROKERS
+          value: kafka.airlines.svc.cluster.local:9092
         - name: DATABASE_URL
           value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres-booking.airlines.svc.cluster.local:5432/$(POSTGRES_DB_BOOKING)
 ---
@@ -135,7 +137,7 @@ spec:
       - name: booking-worker
         image: booking-service:latest
         imagePullPolicy: IfNotPresent
-        command: ["python", "manage.py", "run_consumer"]
+        command: ["opentelemetry-instrument", "python", "manage.py", "run_consumer"]
         livenessProbe:
           exec:
             command:
@@ -161,8 +163,20 @@ spec:
             memory: "128Mi"
 
         env:
+        - name: DJANGO_SETTINGS_MODULE
+          value: config.settings
         - name: OTEL_SERVICE_NAME
           value: booking-worker
+        - name: OTEL_LOGS_EXPORTER
+          value: otlp
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://otel-collector.observability.svc.cluster.local:4317
+        - name: OTEL_EXPORTER_OTLP_PROTOCOL
+          value: grpc
+        - name: OTEL_TRACES_EXPORTER
+          value: otlp
+        - name: OTEL_PROPAGATORS
+          value: tracecontext,baggage,jaeger
         - name: FLIGHT_SERVICE_URL
           valueFrom:
             secretKeyRef:
@@ -193,18 +207,8 @@ spec:
             secretKeyRef:
               name: db-secrets
               key: POSTGRES_DB_BOOKING
-        - name: RABBITMQ_URL
-          value: amqp://guest:guest@rabbitmq.airlines.svc.cluster.local:5672/
-        - name: RABBITMQ_DEFAULT_USER
-          valueFrom:
-            secretKeyRef:
-              name: db-secrets
-              key: RABBITMQ_DEFAULT_USER
-        - name: RABBITMQ_DEFAULT_PASS
-          valueFrom:
-            secretKeyRef:
-              name: db-secrets
-              key: RABBITMQ_DEFAULT_PASS
+        - name: KAFKA_BROKERS
+          value: kafka.airlines.svc.cluster.local:9092
         - name: DATABASE_URL
           value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres-booking.airlines.svc.cluster.local:5432/$(POSTGRES_DB_BOOKING)
 

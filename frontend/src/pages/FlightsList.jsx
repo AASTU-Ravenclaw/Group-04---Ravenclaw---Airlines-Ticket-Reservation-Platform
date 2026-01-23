@@ -33,7 +33,7 @@ const FlightsList = () => {
   const deleteFlight = async (flightId) => {
     if (!window.confirm("Are you sure you want to delete this flight?")) return;
     try {
-      await api.delete(`/flights/${flightId}/`);
+      await api.delete(`/admin/flights/${flightId}/`);
       fetchFlights();
     } catch (err) {
       toast.error("Error deleting flight");

@@ -3,9 +3,9 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import api from "../api/axios";
 import AuthContext from "../context/AuthContext";
 import toast from "react-hot-toast";
-import { 
-    Clock, Calendar, MapPin, CheckCircle, AlertTriangle, User, CreditCard, 
-    Plane, ChevronRight, Users, ArrowRight 
+import {
+    Clock, Calendar, MapPin, CheckCircle, AlertTriangle, User, CreditCard,
+    Plane, ChevronRight, Users, ArrowRight, X
 } from "lucide-react";
 
 const FlightDetails = () => {

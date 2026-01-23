@@ -17,7 +17,9 @@ opentelemetry-instrumentation-django==0.45b0
 opentelemetry-instrumentation-requests==0.45b0
 opentelemetry-instrumentation-psycopg2==0.45b0
 opentelemetry-exporter-otlp==1.24.0
+opentelemetry-propagator-jaeger==1.24.0
 opentelemetry-sdk==1.24.0
+opentelemetry-instrumentation-logging==0.45b0
 
 # Logging
 python-json-logger==2.0.7

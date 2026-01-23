@@ -1,5 +1,7 @@
 # User Service — Running Tests in Kubernetes
 
+This guide shows how to run the Django unit tests for the user-service directly inside a Kubernetes pod without modifying application code.
+
 ## Prerequisites
 - `kubectl` configured for your cluster.
 - Namespace: `airlines`.
@@ -27,6 +29,13 @@ kubectl exec -n airlines $POD -- python manage.py test -v 2
 
 ```bash
 kubectl exec -n airlines $POD -- sh -lc 'DATABASE_URL=sqlite:///test.sqlite3 python manage.py test -v 2'
+```
+
+3) (Optional) Run on the second replica to verify consistency:
+
+```bash
+POD=user-service-6fcccd94c8-qsng9
+kubectl exec -n airlines $POD -- python manage.py test -v 2
 ```
 
 ## Local Development (Optional)

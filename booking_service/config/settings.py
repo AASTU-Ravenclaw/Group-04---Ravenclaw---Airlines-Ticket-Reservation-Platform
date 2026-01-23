@@ -2,12 +2,6 @@ import os
 from pathlib import Path
 import logging
 
-# Import OpenTelemetry configuration
-try:
-    import config.otel  # noqa
-except ImportError:
-    pass  # OpenTelemetry not available
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dev-key')
@@ -41,6 +35,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django_prometheus.middleware.PrometheusBeforeMiddleware',
+    'bookings.trace_logging_middleware.TraceHeaderLoggingMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -117,15 +112,19 @@ SWAGGER_SETTINGS = {
 }
 
 # Service URLs (Internal Docker Network)
+# Public read-only endpoints
 FLIGHT_SERVICE_URL = os.environ.get('FLIGHT_SERVICE_URL', 'http://flight-service:8000/api/v1/flights')
+# Admin/service endpoints (reserve/release seats)
+FLIGHT_ADMIN_SERVICE_URL = os.environ.get('FLIGHT_ADMIN_SERVICE_URL', 'http://flight-service:8000/api/v1/admin/flights')
 
 # Service-to-Service API Key (must match flight service)
 SERVICE_API_KEY = os.environ.get('SERVICE_API_KEY', 'dev-service-key-12345')
 
-# RabbitMQ Settings
-RABBITMQ_USER = os.environ.get('RABBITMQ_DEFAULT_USER', 'guest')
-RABBITMQ_PASS = os.environ.get('RABBITMQ_DEFAULT_PASS', 'guest')
-RABBITMQ_URL = f'amqp://{RABBITMQ_USER}:{RABBITMQ_PASS}@rabbitmq.airlines.svc.cluster.local:5672/'
+# Kafka Settings
+KAFKA_BROKERS = os.environ.get(
+    'KAFKA_BROKERS',
+    'kafka.airlines.svc.cluster.local:9092'
+).split(',')
 
 # CORS settings for frontend access
 CORS_ALLOWED_ORIGINS = [
@@ -206,22 +205,7 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': False,
         },
-        'opentelemetry': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
     },
-}
-
-# OpenTelemetry Configuration
-OPENTELEMETRY = {
-    'SERVICE_NAME': 'booking-service',
-    'SERVICE_VERSION': '1.0.0',
-    'OTLP_ENDPOINT': os.environ.get('OTLP_ENDPOINT', 'http://otel-collector.observability.svc.cluster.local:4318'),
-    'TRACES_EXPORTER': 'otlp',
-    'METRICS_EXPORTER': 'otlp',
-    'LOGS_EXPORTER': 'otlp',
 }
 
 # Create logs directory

@@ -117,11 +117,11 @@ spec:
           mountPath: /etc/otelcol-contrib
         resources:
           requests:
-            memory: "128Mi"
+            memory: "512Mi"
             cpu: "100m"
           limits:
-            memory: "128Mi"
-            cpu: "200m"
+            memory: "512Mi"
+            cpu: "300m"
       volumes:
       - name: otel-config
         configMap:

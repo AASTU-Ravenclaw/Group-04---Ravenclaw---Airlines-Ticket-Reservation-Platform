@@ -17,6 +17,17 @@ class IsAdminOrReadOnly(permissions.BasePermission):
             getattr(request.user, 'role', '') == 'ADMIN'
         )
 
+class IsAdmin(permissions.BasePermission):
+    """
+    Custom permission to only allow ADMIN users for all methods.
+    """
+    def has_permission(self, request, view):
+        return (
+            request.user and 
+            request.user.is_authenticated and 
+            getattr(request.user, 'role', '') == 'ADMIN'
+        )
+
 class IsServiceAuthenticated(permissions.BasePermission):
     """
     Custom permission for service-to-service authentication using API key.

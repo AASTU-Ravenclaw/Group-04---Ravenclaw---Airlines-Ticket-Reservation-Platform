@@ -68,10 +68,6 @@ data:
         static_configs:
           - targets: ['redis.airlines.svc.cluster.local:9121']
 
-      - job_name: 'rabbitmq'
-        static_configs:
-          - targets: ['rabbitmq.airlines.svc.cluster.local:15692']
-
       - job_name: 'mongodb'
         static_configs:
           - targets: ['mongo-notification.airlines.svc.cluster.local:9216']

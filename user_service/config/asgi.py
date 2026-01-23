@@ -13,10 +13,4 @@ from django.core.asgi import get_asgi_application
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
-try:
-    from config.otel import setup_opentelemetry
-    setup_opentelemetry()
-except Exception as e:
-    print(f"Failed to setup OTEL in ASGI: {e}")
-
 application = get_asgi_application()

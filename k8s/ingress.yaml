@@ -158,3 +158,19 @@ spec:
             name: notification-service
             port:
               number: 8000
+
+      # Flight Service admin (requires forward auth)
+      - path: /api/v1/admin/flights
+        pathType: Prefix
+        backend:
+          service:
+            name: flight-service
+            port:
+              number: 8000
+      - path: /api/v1/admin/locations
+        pathType: Prefix
+        backend:
+          service:
+            name: flight-service
+            port:
+              number: 8000
